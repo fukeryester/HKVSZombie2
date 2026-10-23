@@ -1,0 +1,65 @@
+import {chromium} from 'playwright';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+fs.mkdirSync('artifacts',{recursive:true});
+const browser=await chromium.launch({headless:true,channel:process.env.BROWSER_CHANNEL||'msedge',args:['--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']});
+const errors=[];const pages=[];
+async function page(viewport={width:1440,height:1050}){const context=await browser.newContext({viewport});const p=await context.newPage();await p.addInitScript(()=>{Object.defineProperty(crypto,'randomUUID',{value:undefined});});p.on('pageerror',e=>errors.push(e.message));pages.push(p);return p;}
+async function advance(p,seconds){await p.evaluate(seconds=>{const {state}=HKVZ2.app;for(let i=0;i<seconds*30&&!state.over;i++)Sim.tickSim(state,Sim.DT);},seconds);await p.waitForTimeout(220);}
+try{
+  const p=await page();await p.goto('http://127.0.0.1:4174');await p.screenshot({path:'artifacts/menu-desktop.png',fullPage:true});
+  await p.click('#nav-codex');assert.equal(await p.locator('.codex-card').count(),12);assert.equal(await p.locator('.roster-unit').count(),84);
+  await p.click('.back-menu:visible');await p.click('[data-size="4"]');await p.click('[data-side="zom"]');await p.click('[data-civ="zom_asym"]');await p.click('#local-start');
+  assert.equal(await p.evaluate(()=>HKVZ2.app.state.players.length),8);assert.equal(await p.evaluate(()=>HKVZ2.app.seat),4);await p.screenshot({path:'artifacts/battle-4v4.png',fullPage:true});
+  await p.click('#resign');await p.click('#confirm-resign');assert.equal(await p.evaluate(()=>HKVZ2.app.state.players[4].baseHp),0);
+  await p.evaluate(()=>{HKVZ2.app.state.players.filter(p=>p.team==='zom').forEach(p=>p.baseHp=0);});await p.waitForSelector('#result-dialog[open]');await p.click('#result-home');
+  await p.click('[data-size="1"]');await p.click('[data-side="hk"]');await p.click('[data-civ="hk_university"]');await p.click('#local-start');await p.click('#pause');
+  await p.evaluate(()=>HKVZ2.app.state.players.forEach(p=>p.isAI=false));await p.click('[data-tab="workers"]');const old=await p.evaluate(()=>HKVZ2.app.state.players[0].workers.filter(w=>w.job==='gold').length);await p.click('[data-plus="gold"]');assert.equal(await p.evaluate(()=>HKVZ2.app.state.players[0].workers.filter(w=>w.job==='gold').length),old+1);
+  await p.click('[data-worker]');await advance(p,4);assert.equal(await p.evaluate(()=>HKVZ2.app.state.players[0].workers.length),9);
+  await p.click('[data-tab="build"]');await p.click('[data-build="house"]');await p.click('[data-slot="0"]');await advance(p,13);assert.equal(await p.evaluate(()=>HKVZ2.app.state.players[0].popCap),32);
+  await p.evaluate(()=>{const p=HKVZ2.app.state.players[0];p.food=p.gold=2000;});await p.click('[data-age]');await advance(p,19);assert.equal(await p.evaluate(()=>HKVZ2.app.state.players[0].age),2);
+  await p.evaluate(()=>HKVZ2.app.state.players[0].stone=500);await p.click('[data-build="castle"]');await p.click('[data-slot="4"]');await advance(p,29);assert.equal(await p.evaluate(()=>HKVZ2.app.state.players[0].sites.find(s=>s.kind==='castle').done),true);
+  await p.click('[data-tab="army"]');await p.click('[data-spawn="engineer"]');await advance(p,3);assert.ok(await p.evaluate(()=>HKVZ2.app.state.units.some(u=>u.unitId==='engineer')));await p.screenshot({path:'artifacts/battle-economy.png',fullPage:true});
+  await p.click('#help');assert.ok(await p.locator('#help-dialog').isVisible());await p.click('[data-close="help-dialog"].primary');
+  await p.click('#pause');await p.evaluate(()=>HKVZ2.app.state.players[1].baseHp=0);await p.waitForSelector('#result-dialog[open]');assert.match(await p.locator('#result-subtitle').textContent(),/胜利/);await p.click('#result-home');
+  await p.click('[data-ranked="true"]');await p.click('#local-start');await p.evaluate(()=>HKVZ2.app.state.players[1].baseHp=0);await p.waitForSelector('#result-dialog[open]');assert.match(await p.locator('#result-subtitle').textContent(),/胜点 \+15/);await p.click('#result-home');await p.click('#nav-rank');assert.match(await p.locator('#rank-points').textContent(),/^15 /);
+  console.log('PASS: menus, 84 portraits, both factions, 4v4, assignment, training, construction, ages, castle, results and ranked score');
+  const mobile=await page({width:390,height:844});await mobile.goto('http://127.0.0.1:4174');await mobile.screenshot({path:'artifacts/menu-mobile.png',fullPage:true});assert.equal(await mobile.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await mobile.click('#local-start');await mobile.click('[data-tab="build"]');await mobile.screenshot({path:'artifacts/battle-mobile.png',fullPage:true});assert.equal(await mobile.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  console.log('PASS: mobile 390px menu and battle have no horizontal overflow');
+  // In-memory relay exercises the real GameHub SDK and browser WebSockets with 8 identities.
+  const peers=new Map();let room=null,id=0,largest=0;const messageCounts=new Map();
+  function roomView(){return {...room,members:[...peers.values()].filter(p=>p.joined).map(p=>p.member),member_count:[...peers.values()].filter(p=>p.joined).length};}
+  function deliver(peer,msg){try{peer.ws.send(JSON.stringify(msg));}catch{}}
+  const multiplayer=[];
+  for(let i=0;i<8;i++){
+    const p=await page({width:1280,height:900});const user=i+101;await p.addInitScript(()=>{window.GAMEHUB_GAME_ID='hkvsz2-test';});
+    await p.route('**/api/v1/**',async route=>{const req=route.request();if(req.url().endsWith('/rooms')&&req.method()==='POST'){const data=req.postDataJSON();room={code:'HK2345',game_id:data.game_id,max_players:data.max_players,host_id:user};await route.fulfill({json:{ok:true,room:roomView()}});}else if(req.url().includes('/stats/me'))await route.fulfill({json:{logged_in:false,stats:[],achievements:[],leaderboards:[]}});else await route.fulfill({json:{ok:true}});});
+    await p.routeWebSocket('**/ws/rooms',ws=>{const clientId='client-'+(++id),peer={ws,joined:false,member:{client_id:clientId,user_id:user,username:'Tester '+user,seat:0}};peers.set(clientId,peer);
+      const leave=()=>{if(!peer.joined)return;peer.joined=false;const msg={op:'member_left',member:peer.member,room:roomView()};for(const q of peers.values())if(q.joined)deliver(q,msg);};
+      ws.onClose(leave);
+      ws.onMessage(raw=>{const m=JSON.parse(raw);if(m.op==='join'){assert.equal(m.room,room.code);assert.ok(roomView().member_count<room.max_players);peer.member.seat=roomView().member_count;peer.joined=true;deliver(peer,{op:'welcome',you:peer.member,room:roomView()});for(const q of peers.values())if(q!==peer&&q.joined)deliver(q,{op:'member_joined',member:peer.member,room:roomView()});}
+        else if(m.op==='leave'){leave();deliver(peer,{op:'left'});}
+        else if(m.op==='ping')deliver(peer,{op:'pong'});
+        else if(m.op==='broadcast'||m.op==='send'){const len=Buffer.byteLength(JSON.stringify(m));largest=Math.max(largest,len);assert.ok(len<=8192,'relay 8KB limit');const bucket=clientId+':'+Math.floor(Date.now()/1000);messageCounts.set(bucket,(messageCounts.get(bucket)||0)+1);for(const q of peers.values())if(q.joined&&q!==peer&&(!m.to||q.member.client_id===m.to))deliver(q,{op:'message',from:clientId,to:m.to||null,data:m.data});}
+      });});
+    await p.goto('http://127.0.0.1:4174');multiplayer.push(p);
+    if(i===0){await p.click('[data-size="4"]');await p.click('#create-room');}else{await p.fill('#room-code','HK2345');await p.click('#join-room');}
+    await p.waitForFunction(()=>HKVZ2.app.network?.lobby?.players.some(p=>p?.clientId===HKVZ2.app.network.me));
+  }
+  const civs=['hk_university','hk_wild','hk_gang','hk_finance','zom_robot','zom_necro','zom_asym','zom_ghost'];
+  for(let i=0;i<8;i++){await multiplayer[i].selectOption('#lobby-civ',civs[i]);await multiplayer[i].click('#lobby-ready');}
+  await multiplayer[0].waitForFunction(()=>HKVZ2.app.network.lobby.players.every(p=>p?.ready));await multiplayer[0].click('#lobby-start');
+  await Promise.all(multiplayer.map(p=>p.waitForFunction(()=>HKVZ2.app.screen==='play'&&HKVZ2.app.state.tick>3)));
+  // Every participant trains and reassigns a worker; payload seat spoofing is overwritten by host.
+  for(const p of multiplayer)await p.evaluate(()=>{HKVZ2.dispatch({op:'worker',seat:0});HKVZ2.dispatch({op:'assign',workerId:1,job:'gold',seat:0});});
+  await multiplayer[0].waitForFunction(()=>HKVZ2.app.state.players.every(p=>p.workers.length===9),{},{timeout:15000});
+  const host=multiplayer[0];const target=await host.evaluate(()=>{const {app}=HKVZ2;app.paused=true;while(app.state.tick%3){app.network.beforeTick(app.state);Sim.tickSim(app.state,Sim.DT);app.network.afterTick(app.state);}return app.state.tick;});
+  await Promise.all(multiplayer.slice(1).map(p=>p.waitForFunction(t=>HKVZ2.app.state.tick===t,target)));
+  const states=await Promise.all(multiplayer.map(p=>p.evaluate(()=>JSON.stringify(HKVZ2.app.state))));states.slice(1).forEach(s=>assert.equal(s,states[0],'all 8 simulations must match exactly'));
+  assert.ok(Math.max(...messageCounts.values())<=20,'relay 20 messages/second limit');console.log(`PASS: real SDK + 8 browser sessions, identical complete states at tick ${target}, largest packet ${largest} bytes`);
+  await host.evaluate(()=>HKVZ2.app.paused=false);await multiplayer[7].evaluate(()=>HKVZ2.app.network.close());await host.waitForFunction(()=>HKVZ2.app.state.players[7].baseHp===0);assert.equal(await host.evaluate(()=>HKVZ2.app.state.over),false);
+  await host.evaluate(()=>HKVZ2.app.network.close());await multiplayer[1].waitForFunction(()=>HKVZ2.app.aborted);assert.equal(await multiplayer[1].evaluate(()=>Progress.history().length),0);
+  console.log('PASS: guest disconnect resigns only that seat; host disconnect aborts without ranked settlement');
+  assert.deepEqual(errors,[]);console.log('PASS: no browser runtime errors');
+}finally{await browser.close();}
+
