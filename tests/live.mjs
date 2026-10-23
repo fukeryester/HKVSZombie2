@@ -24,10 +24,16 @@ try{
   try{await Promise.all(pages.map(p=>p.waitForFunction(()=>HKVZ2.app.state?.tick>3,{},{timeout:6000})));}catch(e){console.log(await Promise.all(pages.map(p=>p.evaluate(()=>({screen:HKVZ2.app.screen,tick:HKVZ2.app.state?.tick,paused:HKVZ2.app.paused,aborted:HKVZ2.app.aborted,host:HKVZ2.app.network?.host,me:HKVZ2.app.network?.me,hostId:HKVZ2.app.network?.hostId,playing:HKVZ2.app.network?.playing,toast:document.getElementById('toast').textContent,errors:document.getElementById('battle-notice').textContent})))));throw e;}
   for(const p of pages)await p.evaluate(()=>HKVZ2.dispatch({op:'worker'}));
   await pages[0].waitForFunction(()=>HKVZ2.app.state.players.every(p=>p.workers.length===9));
+  for(const p of pages)await p.evaluate(()=>HKVZ2.dispatch({op:'construct',kind:'barracks',slot:1}));
+  await pages[0].waitForFunction(()=>HKVZ2.app.state.players.every(p=>Econ.lanes(p,'army').length===2),{},{timeout:35000});
+  for(const p of pages)await p.evaluate(()=>HKVZ2.dispatch({op:'construct',kind:'town_center',slot:2}));
+  await pages[0].waitForFunction(()=>HKVZ2.app.state.players.every(p=>Econ.lanes(p,'worker').length===2),{},{timeout:35000});
+  for(const p of pages)await p.evaluate(()=>{const a=HKVZ2.app,unit=Object.keys(CIVS[a.state.players[a.seat].civId].units)[0];for(let i=0;i<4;i++){HKVZ2.dispatch({op:'spawn',unit});HKVZ2.dispatch({op:'worker'});}});
+  await pages[0].waitForFunction(()=>HKVZ2.app.state.players.every(p=>p.workers.length===13&&p.queue.length===0),{},{timeout:15000});
   const tick=await pages[0].evaluate(()=>{const a=HKVZ2.app;a.paused=true;while(a.state.tick%3){a.network.beforeTick(a.state);Sim.tickSim(a.state,Sim.DT);a.network.afterTick(a.state);}return a.state.tick;});
   await pages[1].waitForFunction(t=>HKVZ2.app.state.tick===t,tick);
   const states=await Promise.all(pages.map(p=>p.evaluate(()=>JSON.stringify(HKVZ2.app.state))));assert.equal(states[0],states[1]);
   fs.mkdirSync('artifacts',{recursive:true});await pages[0].screenshot({path:'artifacts/live-multiplayer.png',fullPage:true});
   await pages[0].evaluate(()=>HKVZ2.app.network.close());await pages[1].waitForFunction(()=>HKVZ2.app.aborted);
-  assert.deepEqual(errors,[]);console.log(JSON.stringify({ok:true,projectId:deployment.projectId,cloudStats:true,liveRelaySessions:2,identicalAtTick:tick,matchResultsSubmitted:0}));
+  assert.deepEqual(errors,[]);console.log(JSON.stringify({ok:true,projectId:deployment.projectId,cloudStats:true,liveRelaySessions:2,parallelArmyLanes:2,parallelWorkerLanes:2,identicalAtTick:tick,matchResultsSubmitted:0}));
 }finally{await browser.close();}

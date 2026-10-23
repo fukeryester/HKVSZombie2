@@ -5,7 +5,7 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const base=process.env.GAMEHUB_BASE||'http://101.43.19.238';
 const token=process.env.GAMEHUB_TOKEN;
 const title='香港大战僵尸2：生死存亡';
-const version=process.env.GAMEHUB_VERSION||'0.1.2';
+const version=process.env.GAMEHUB_VERSION||'0.2.0';
 if(!token)throw new Error('Set GAMEHUB_TOKEN in the process environment. Never put it in src/.');
 const headers={Authorization:'Bearer '+token};
 async function api(url,options={}){const r=await fetch(base+url,{...options,headers:{...headers,...options.headers}});const j=await r.json();if(!r.ok)throw new Error(JSON.stringify(j));return j;}
@@ -14,7 +14,7 @@ const projects=await api('/api/v1/projects');const existing=projects.projects.fi
 if(existing.length>1)throw new Error('Multiple exact-title projects. Select a project explicitly before deploying.');
 if(process.argv.includes('--check')){console.log(JSON.stringify({matching_projects:existing.map(p=>({id:p.id,title:p.title})),other_projects:projects.projects.map(p=>({id:p.id,title:p.title}))}));process.exit(0);}
 const zip=fs.readFileSync(path.join(root,'dist/hkvsz2.zip'));
-const form=new FormData();form.set('file',new Blob([zip]),'hkvsz2.zip');form.set('label','v'+version);form.set('changelog','第二代重构：统一原创像素美术，12文明84兵种，四资源、农民调遣与施工、四时代、1v1至4v4同步对战、排位与对局记录。');
+const form=new FormData();form.set('file',new Blob([zip]),'hkvsz2.zip');form.set('label','v'+version);form.set('changelog',process.env.GAMEHUB_CHANGELOG||'新增兵营与城镇中心，完工分别增加并行士兵/农民训练队列；支持连续排队、自动或指定分配、训练进度、取消退款；修复3v3和4v4士兵、农民及资源区浮空，统一道路落点与弹道；调整建筑阵位避免基地遮挡。');
 if(!existing.length){form.set('title',title);form.set('description','维港的灯还亮着。12个文明、84种兵种；采集食物、木头、黄金和石头，调遣农民建城，在1v1至4v4的香港夜战中守住最后一道防线。');form.set('engine','html');form.set('published','1');form.set('tags','strategy,multiplayer,action,horror');const cover=path.join(root,'artifacts/cover.png');if(fs.existsSync(cover))form.set('cover',new Blob([fs.readFileSync(cover)]),'cover.png');}
 const result=await api(existing.length?`/api/v1/projects/${existing[0].id}/versions`:'/api/v1/games',{method:'POST',body:form});
 const projectId=result.game.id;

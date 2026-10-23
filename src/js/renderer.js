@@ -2,6 +2,8 @@
 window.Renderer=(()=>{
   const W=1800,H=590,G=455;let backdrop=null;const positions=new Map();
   const {rect,line,poly}=Pixel;
+  const groundY=(row=0)=>G+14+Math.max(0,Math.min(3,row))*18;
+  const workerPoint=(p,w)=>({x:w.x,y:groundY(p.row)+16+(w.id%3)*3});
   const text=(c,t,x,y,color='#9db1bc',size=11)=>{c.fillStyle=color;c.font=`${size}px "Microsoft YaHei", sans-serif`;c.fillText(t,x,y);};
   function background(){
     const canvas=document.createElement('canvas');canvas.width=W;canvas.height=H;const c=canvas.getContext('2d');c.scale(2,2);
@@ -39,7 +41,7 @@ window.Renderer=(()=>{
     rect(c,446,210,45,11,'#263a40');text(c,'HONG KONG',450,218,'#80aaa8',6);
     return canvas;
   }
-  function base(c,p,time){const x=p.baseX,y=G-p.row*36;const civ=CIVS[p.civId],z=civ.side==='zom',dead=p.baseHp<=0;
+  function base(c,p,time){const x=p.baseX,y=groundY(p.row);const civ=CIVS[p.civId],z=civ.side==='zom',dead=p.baseHp<=0;
     c.save();c.translate(x,y);if(dead)c.globalAlpha=.45;
     rect(c,-40,-82,80,82,'#101e2b');rect(c,-36,-78,72,72,civ.color);rect(c,-36,-78,13,72,'#1b303a');rect(c,-39,-85,78,7,'#7d9195');rect(c,-25,-111,50,28,'#1b2e3c');rect(c,-21,-108,42,22,civ.color);rect(c,-18,-105,36,8,civ.accent);rect(c,-32,-75,65,4,'#96afa4');
     for(let row=0;row<2;row++)for(let col=0;col<4;col++){rect(c,-27+col*16,-64+row*20,10,13,'#132533');rect(c,-25+col*16,-62+row*20,5,8,dead?'#394950':civ.accent);}
@@ -60,32 +62,34 @@ window.Renderer=(()=>{
     if((p.baseShieldUntil||0)>time){c.strokeStyle='#b8d1b3';c.lineWidth=2;c.strokeRect(-53,-155,106,167);rect(c,-55,-157,8,8,'#d2ddbc');rect(c,47,6,8,8,'#d2ddbc');}
     text(c,'0'+(p.seat+1),-9,-94,'#152c35',9);
     rect(c,-43,15,86,4,'#101e29');rect(c,-42,16,84*p.baseHp/p.baseHpMax,2,z?'#c28b86':'#8ac1b7');
-    c.restore();text(c,p.name.slice(0,13),x-39,y+34,p.baseHp>0?'#b9c9c5':'#7d8686',10);
+    c.restore();text(c,p.name.slice(0,13)+' · 城镇中心',x-39,y+34,p.baseHp>0?'#b9c9c5':'#7d8686',9);
   }
-  function site(c,p,s,time){const y=G-p.row*36;const def=Econ.BUILDINGS[s.kind];c.save();c.translate(s.x,y);if(!s.done){rect(c,-27,-38,54,38,'#9e956c1f');for(let i=0;i<4;i++)line(c,-26+i*17,-45,-26+i*17,0,'#aa9876',2);line(c,-27,-38,27,-38,'#d6bd8b',2);line(c,-25,-37,25,-3,'#8e8c71',2);rect(c,-26,-19,52,4,'#233641');rect(c,-26,-19,52*s.progress,3,'#d7bb7b');}
+  function site(c,p,s,time){const y=groundY(p.row);const def=Econ.BUILDINGS[s.kind];c.save();c.translate(s.x,y);if(!s.done){rect(c,-27,-38,54,38,'#9e956c1f');for(let i=0;i<4;i++)line(c,-26+i*17,-45,-26+i*17,0,'#aa9876',2);line(c,-27,-38,27,-38,'#d6bd8b',2);line(c,-25,-37,25,-3,'#8e8c71',2);rect(c,-26,-19,52,4,'#233641');rect(c,-26,-19,52*s.progress,3,'#d7bb7b');}
     else if(s.kind==='house'){rect(c,-25,-38,50,38,'#253b46');rect(c,-21,-35,42,32,'#506268');rect(c,-28,-43,56,7,'#9b9982');rect(c,-18,-51,25,8,'#657a79');rect(c,-16,-30,10,12,'#a1bab0');rect(c,7,-30,10,12,'#a1bab0');rect(c,-5,-17,12,17,'#203742');line(c,-27,-4,28,-4,'#82958b',2);}
+    else if(s.kind==='barracks'){const civ=CIVS[p.civId];rect(c,-29,-40,58,40,'#1b303b');rect(c,-25,-36,50,32,civ.color);poly(c,[[-34,-40],[-21,-54],[22,-54],[34,-40]],'#667d78');rect(c,-12,-27,24,27,'#102630');rect(c,-9,-24,18,20,'#4d6866');line(c,-23,-31,-16,-19,'#d1c199',2);line(c,-16,-31,-23,-19,'#d1c199',2);rect(c,19,-36,3,25,'#a5b7a2');poly(c,[[22,-35],[38,-31],[22,-25]],civ.accent);}
+    else if(s.kind==='town_center'){const civ=CIVS[p.civId];rect(c,-31,-49,62,49,'#213641');rect(c,-27,-45,54,42,civ.color);rect(c,-35,-53,70,7,'#a1b2a1');rect(c,-12,-72,25,20,'#627e78');rect(c,-15,-75,31,5,'#a9b7a3');rect(c,-5,-69,11,11,civ.accent);rect(c,-21,-36,10,12,'#bacbb3');rect(c,11,-36,10,12,'#bacbb3');rect(c,-8,-23,17,23,'#172e39');rect(c,-5,-19,11,19,'#76958a');rect(c,-35,-3,70,6,'#91a393');}
     else if(s.kind==='castle'){const dead=s.hp<=0;c.globalAlpha=dead?.4:1;rect(c,-34,-66,68,66,'#384b55');rect(c,-30,-62,60,61,'#617477');rect(c,-34,-75,16,20,'#8a9790');rect(c,20,-75,16,20,'#8a9790');rect(c,-12,-70,24,12,'#84998f');for(let yy=-50;yy<0;yy+=12)for(let xx=-28;xx<32;xx+=16)line(c,xx,yy,xx+14,yy,'#3a535e',1);rect(c,-9,-26,18,26,'#1b303d');rect(c,10,-58,22,5,'#142735');rect(c,28,-58,10,3,'#9ea99a');rect(c,-32,7,64,3,'#1c303a');rect(c,-32,7,64*s.hp/s.maxHp,2,'#b5b38a');}
     else{rect(c,-30,-44,60,44,'#2d4852');rect(c,-33,-49,66,6,'#829b92');rect(c,-22,-37,15,20,'#5b837e');rect(c,-1,-37,22,20,'#9caf9b');rect(c,-20,-14,42,14,'#1c343f');line(c,27,-45,27,-66,'#91a699',3);}
-    c.restore();if(!s.done)text(c,def.name+' '+Math.floor(s.progress*100)+'%',s.x-27,y-55,'#d7bb7b',10);
+    c.restore();if(!s.done)text(c,def.name+' '+Math.floor(s.progress*100)+'%',s.x-27,y-55,'#d7bb7b',10);else if(s.kind==='barracks'||s.kind==='town_center')text(c,def.name,s.x-18,y-80,'#b7cbbb',9);
   }
-  function resources(c,p){if(p.baseHp<=0)return;const y=G-p.row*36;for(let i=0;i<4;i++){const x=Econ.resourceX(p,Econ.TYPES[i]);c.save();c.translate(x,y);
+  function resources(c,p){if(p.baseHp<=0)return;const y=groundY(p.row);for(let i=0;i<4;i++){const x=Econ.resourceX(p,Econ.TYPES[i]);c.save();c.translate(x,y);
       if(i===0){rect(c,-16,-12,32,12,'#70533e');rect(c,-18,-15,36,4,'#b19770');for(let j=0;j<3;j++){rect(c,-12+j*10,-23,8,8,'#ad7863');rect(c,-10+j*10,-21,4,3,'#ddb396');}}
       if(i===1){[-10,0,10].forEach((dx,j)=>{rect(c,dx-2,-28+j*3,4,29,'#6d624a');poly(c,[[dx-13,-20+j*3],[dx,-45+j*3],[dx+13,-20+j*3]],'#426862');poly(c,[[dx-11,-30+j*3],[dx,-52+j*3],[dx+11,-30+j*3]],'#668476');});}
       if(i>=2){poly(c,[[-20,0],[-17,-18],[-6,-27],[6,-22],[14,-27],[24,0]],i===2?'#7d7a65':'#627781');poly(c,[[-17,-18],[-6,-27],[-2,-10]],i===2?'#bdad70':'#a1b2ac');rect(c,6,-17,6,5,i===2?'#ddbe75':'#8ea3a3');rect(c,-10,-9,7,4,i===2?'#d7b26d':'#9bb0ae');}
       c.restore();text(c,Econ.NAMES[Econ.TYPES[i]],x-11,y+18,['#d3a58b','#96b598','#d7bc7d','#a3b6bb'][i],9);}}
-  function worker(c,p,w,time){const y=G+16-p.row*36+(w.id%3)*4;const state=w.phase==='walk'?'walk':w.phase==='work'?'work':'idle';const frame=Math.floor(time*(state==='work'?9:10)+w.id)% (state==='work'?6:8);
+  function worker(c,p,w,time){const y=workerPoint(p,w).y;const state=w.phase==='walk'?'walk':w.phase==='work'?'work':'idle';const frame=Math.floor(time*(state==='work'?9:10)+w.id)% (state==='work'?6:8);
     c.save();c.translate(w.x,y);c.scale(.72,.72);Pixel.draw(c,p.civId,'__worker_'+w.job,0,0,70,state,frame,p.team==='hk'?1:-1);c.restore();}
-  function point(x,y){return {x,y:G-(y||0)*.6};}
+  function point(x,y=0,row=Math.max(0,Math.min(3,Math.round(y/60)))){return {x,y:groundY(row)+(y-row*60)*.35};}
   function draw(canvas,state,opts={}){
     if(!backdrop)backdrop=background();const c=canvas.getContext('2d');c.imageSmoothingEnabled=false;c.clearRect(0,0,W,H);c.drawImage(backdrop,0,0);const time=state?.time||performance.now()/1000;
     // drifting mist and rain, entirely visual and excluded from deterministic simulation
     c.globalAlpha=.18;for(let i=0;i<35;i++){const x=(i*173+time*34)%W,y=(i*97+time*180)%H;line(c,x,y,x-5,y+13,'#a3bbbd',1);}c.globalAlpha=1;
     if(!state)return;
-    state.players.slice().sort((a,b)=>b.row-a.row).forEach(p=>{resources(c,p);p.sites.forEach(s=>site(c,p,s,time));base(c,p,time);p.workers.forEach(w=>worker(c,p,w,time));});
-    if(opts.placing&&state.players[opts.seat]){const p=state.players[opts.seat];for(let slot=0;slot<6;slot++){if(p.sites.some(s=>s.slot===slot))continue;const x=Econ.slotX(p,slot),y=G-p.row*36;const valid=opts.placing!=='castle'||slot>=4;rect(c,x-29,y-40,58,40,valid?'#83bba53b':'#c8837733');c.strokeStyle=valid?'#aad3b6':'#a26961';c.strokeRect(x-29,y-40,58,40);text(c,String(slot+1),x-3,y-15,valid?'#c5e7c9':'#bf8881',14);}}
-    for(const dead of state.corpses){const p=point(dead.x,dead.y);const frame=Math.min(5,Math.floor((2-(dead.until-time))*4));Pixel.draw(c,dead.civId,dead.unitId,p.x,p.y,72,'death',frame,dead.team==='hk'?1:-1,.5);}
-    for(const u of [...state.units].sort((a,b)=>b.y-a.y)){
-      const p=point(u.x,u.y);let jump=0;if(u.jumpUntil>time)jump=Math.sin((time-u.jumpStart)/u.jumpDur*Math.PI)*40;
+    state.players.slice().sort((a,b)=>a.row-b.row).forEach(p=>{resources(c,p);p.sites.forEach(s=>site(c,p,s,time));base(c,p,time);p.workers.forEach(w=>worker(c,p,w,time));});
+    if(opts.placing&&state.players[opts.seat]){const p=state.players[opts.seat];for(let slot=0;slot<6;slot++){if(p.sites.some(s=>s.slot===slot))continue;const x=Econ.slotX(p,slot),y=groundY(p.row);const valid=opts.placing!=='castle'||slot>=4;rect(c,x-29,y-40,58,40,valid?'#83bba53b':'#c8837733');c.strokeStyle=valid?'#aad3b6':'#a26961';c.strokeRect(x-29,y-40,58,40);text(c,String(slot+1),x-3,y-15,valid?'#c5e7c9':'#bf8881',14);}}
+    for(const dead of state.corpses){const p=point(dead.x,dead.y,dead.row);const frame=Math.min(5,Math.floor((2-(dead.until-time))*4));Pixel.draw(c,dead.civId,dead.unitId,p.x,p.y,72,'death',frame,dead.team==='hk'?1:-1,.5);}
+    for(const u of [...state.units].sort((a,b)=>point(a.x,a.y,a.row).y-point(b.x,b.y,b.row).y)){
+      const p=point(u.x,u.y,u.row);let jump=0;if(u.jumpUntil>time)jump=Math.sin((time-u.jumpStart)/u.jumpDur*Math.PI)*40;
       const attacking=time-u.atkFxTime<.40;const anim=attacking?'attack':u.moving?'walk':'idle';const frame=attacking?Math.min(5,Math.floor((time-u.atkFxTime)*15)):Math.floor(time*(anim==='walk'?11:3)+u.id)%8;
       const size=(u.def.arch==='zom_giant'?104:u.def.machine?100:78)*(u.row? .88:1);
       c.fillStyle='#0b1c2870';c.beginPath();c.ellipse(p.x,p.y+3,size*.22,3,0,0,Math.PI*2);c.fill();
@@ -98,7 +102,7 @@ window.Renderer=(()=>{
       if((u.stunnedUntil||0)>time){rect(c,p.x-11,p.y-size*.8,6,2,'#a6cdd1');rect(c,p.x+6,p.y-size*.8-4,6,2,'#a6cdd1');}
       if(state.effects.some(e=>e.kind==='buff_army'&&e.team===u.team)){rect(c,p.x-18,p.y+4,36,2,'#d3bb85');rect(c,p.x-12,p.y+7,24,1,'#9aaf8f');}
     }
-    for(const pr of state.projectiles){const k=Math.min(1,pr.t/pr.dur),fr=pr.fromRow??state.players[pr.seat]?.row??0,tr=pr.toRow??fr;const from={x:pr.x_from,y:G-fr*36+(pr.y_from-fr*60)},to={x:pr.x_to,y:G-tr*36+(pr.y_to-tr*60)};let x=from.x+(to.x-from.x)*k,y=from.y+(to.y-from.y)*k;
+    for(const pr of state.projectiles){const k=Math.min(1,pr.t/pr.dur),fr=pr.fromRow??state.players[pr.seat]?.row??0,tr=pr.toRow??fr;const from={x:pr.x_from,y:groundY(fr)+(pr.y_from-fr*60)},to={x:pr.x_to,y:groundY(tr)+(pr.y_to-tr*60)};let x=from.x+(to.x-from.x)*k,y=from.y+(to.y-from.y)*k;
       if(/lob|molotov|barrage/.test(pr.kind))y-=Math.sin(k*Math.PI)*75;const col=pr.team==='hk'?'#e5c68d':'#b7d097';line(c,x,y,x-(to.x-from.x)*.025,y-(to.y-from.y)*.025,col,2);rect(c,x-2,y-2,4,4,col);
     }
     for(const e of state.effects){if(e.x==null)continue;const p=point(e.x,e.y),life=e.life||.5,k=Math.min(1,life/(e.initLife||.6));c.save();c.globalAlpha=Math.min(.8,k);
@@ -114,5 +118,5 @@ window.Renderer=(()=>{
   function menu(canvas){const players=[{team:'hk',civId:'hk_police',name:'香港守军',isAI:false},{team:'zom',civId:'zom_classic',name:'感染者',isAI:true}];const s=Sim.createInitialState({seed:7,mode:'1v1',players});s.players.forEach(p=>{p.baseX=p.team==='hk'?210:1590;p.workers=[];});s.units=[];
     return {draw(){s.time=performance.now()/1000;draw(canvas,s,{seat:0});const c=canvas.getContext('2d');['hk_finance','hk_university','hk_police','hk_gang','hk_wild','zom_classic','zom_necro','zom_asym'].forEach((id,i)=>{const uid=Object.keys(CIVS[id].units)[i%7],x=620+i*66;Pixel.draw(c,id,uid,x,475,110,i<5?'walk':'attack',Math.floor(s.time*7+i)% (i<5?8:6),i<5?1:-1);});}};
   }
-  return {draw,menu,W,H,G,point};
+  return {draw,menu,W,H,G,point,groundY,workerPoint};
 })();

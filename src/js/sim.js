@@ -164,11 +164,11 @@ function applyAction(state, act) {
   if (!p) return { ok:false, err:"no seat" };
   const civ = CIVS[p.civId];
   if (p.baseHp <= 0) return {ok:false,err:"基地已被摧毁"};
-  if (["worker","assign","construct","resume","age"].includes(act.op)) return Econ.action(state,p,act);
+  if (["worker","assign","construct","resume","age","cancel_training"].includes(act.op)) return Econ.action(state,p,act);
 
   switch (act.op) {
     case "build": return {ok:false,err:"请派农民建造"};
-    case "spawn": return doSpawn(state, p, civ, act.unit);
+    case "spawn": return doSpawn(state, p, civ, act.unit,act.laneId);
     case "skill": return doSkill(state, p, civ, act.skill);
     case "resign":
       p.baseHp = 0;
@@ -177,23 +177,11 @@ function applyAction(state, act) {
   }
 }
 
-function doSpawn(state, p, civ, unitId) {
+function doSpawn(state, p, civ, unitId,laneId) {
   const u = Object.hasOwn(civ.units,unitId)?civ.units[unitId]:null;
   if (!u) return { ok:false, err:"no such unit" };
   if (u.prereq && !p.built[u.prereq]) return { ok:false, err:"prereq" };
-  const resourceCost = Econ.unitCost(u);
-  if (!Econ.can(p,resourceCost)) return {ok:false,err:"训练资源不足"};
-  if (p.pop + u.pop > p.popCap) return { ok:false, err:"pop" };
-  const cdKey = "spawn_" + unitId;
-  if ((p.cd[cdKey] || 0) > state.time) return { ok:false, err:"cd" };
-
-  if (p.queue.length >= 12) return {ok:false,err:"训练队列已满"};
-  Econ.pay(p,resourceCost);
-  p.pop += u.pop;
-  p.cd[cdKey] = state.time + Math.max(0.1, u.buildTime);
-  // 加入队列，buildTime 之后正式出场
-  p.queue.push({ unitId, ready: Math.max(state.time,p.queue.at(-1)?.ready || 0) + u.buildTime });
-  return { ok:true };
+  return Econ.enqueue(p,'army',state.time,{unitId,duration:u.buildTime,cost:Econ.unitCost(u),pop:u.pop},laneId);
 }
 
 function skillCdRemain(p, skill, now) {
@@ -555,9 +543,9 @@ function tickSim(state, dt) {
     }
 
     // 出兵队列
-    while (p.queue.length && p.queue[0].ready <= state.time) {
-      const q = p.queue.shift();
-      spawnUnit(state, p, q.unitId, {});
+    for (const q of Econ.complete(p,'army',state.time)) {
+      const lane=Econ.lanes(p,'army').find(l=>l.id===q.laneId);
+      spawnUnit(state,p,q.unitId,{x:lane?.x??p.baseX});
     }
   });
 
@@ -991,7 +979,7 @@ function tickSim(state, dt) {
         id: state.nextEffectId++, kind: "explode", x: u.x, y: u.y, r: u.def.explodeR, life: 0.5,
       });
     }
-    state.corpses.push({ x: u.x, y: u.y, unitId: u.unitId, civId: u.civId, team: u.team, until: state.time + 2 });
+    state.corpses.push({ x: u.x, y: u.y, row:u.row, unitId: u.unitId, civId: u.civId, team: u.team, until: state.time + 2 });
   }
   state.units = alive;
   state.corpses = state.corpses.filter(c => c.until > state.time);
