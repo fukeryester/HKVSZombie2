@@ -79,7 +79,7 @@ try{
   assert.ok(await multiplayer[0].evaluate(()=>HKVZ2.app.state.units.every(u=>{const y=Renderer.point(u.x,u.y,u.row).y;return y>=460&&y<=558;})));
   console.log('PASS: 8 peers construct both facilities, train in parallel, remotely cancel orders and remain grounded');
   const skillOrders=[];for(const peer of multiplayer){skillOrders.push(await peer.evaluate(()=>{const a=HKVZ2.app,p=a.state.players[a.seat],index=p.civId==='zom_necro'?2:p.civId==='zom_robot'?1:0;const skill=CIVS[p.civId].skills[index];HKVZ2.dispatch({op:'skill',skill});return {seat:a.seat,skill};}));}
-  await multiplayer[0].waitForFunction(list=>list.every(({seat,skill})=>HKVZ2.app.state.players[seat].cd['skill_'+skill]>0),skillOrders);console.log('PASS: all eight peers activate faction abilities through protocol 10');
+  await multiplayer[0].waitForFunction(list=>list.every(({seat,skill})=>HKVZ2.app.state.players[seat].cd['skill_'+skill]>0),skillOrders);console.log('PASS: all eight peers activate faction abilities through protocol 11');
   const crisisTick=await multiplayer[0].evaluate(()=>{const a=HKVZ2.app;a.paused=true;while(a.state.tick%3){a.network.beforeTick(a.state);Sim.tickSim(a.state,Sim.DT);a.network.afterTick(a.state);}return a.state.tick;});
   await Promise.all(multiplayer.slice(1).map(p=>p.waitForFunction(t=>HKVZ2.app.state.tick===t,crisisTick)));
   for(const p of multiplayer)await p.evaluate(()=>{const s=HKVZ2.app.state;s.players.forEach(q=>q.baseHp=q.baseHpMax*.08);s.players[0].baseHp=0;s.players[0].baseRuined=true;War.update(s);});
