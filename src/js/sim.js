@@ -589,8 +589,7 @@ function tickSim(state, dt) {
   });
 
   // ---- 基地远程防御：只攻击进入警戒区的最近敌军 ----
-  // 伤害按目标最大生命的 28% 计算并封顶，最便宜杂兵通常 3~4 发倒地，
-  // 同时不会按比例四发秒杀高级坦克。
+  // 固定伤害随基地时代成长（42/56/70/84）；低阶兵血量保证同阶段通常四发倒地。
   state.players.forEach(p => {
     if (p.baseHp <= 0||p.baseRuined||p.resigned) return;
     p.baseAttackCd = Math.max(0, (p.baseAttackCd || 0) - dt);
@@ -606,8 +605,6 @@ function tickSim(state, dt) {
       }
     }
     if (!target) return;
-    // 1v1：杂兵约 3~4 发；2v2/3v3 多线更乱，炮台提到 2 发清一个 T1 杂兵。
-    const teamMode = state.mode !== "1v1";
     const damage = 28+p.age*14;
     damageUnit(state,target,damage,null);
     p.baseAttackCd = BASE_ATTACK_CD;

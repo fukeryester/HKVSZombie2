@@ -15,7 +15,8 @@
     Object.values(c.units).forEach(u=>{
       const t=u.tier, tank=/giant|tank/.test(u.arch),support=!!u.support;
       // Undo old era compression and use explicit age profiles, preserving role ratios.
-      const h=t===1?Math.round(u.hp*.60):t===2?Math.round(u.hp*.78):Math.round((t===3?2600:5600)*(tank?1.4:support?.62:1));
+      // Early infantry survives three same-age HQ shots; heavy units keep a durability premium.
+      const h=t===1?Math.max(150,Math.round(u.hp*.60)):t===2?Math.max(tank?270:210,Math.round(u.hp*.78)):Math.round((t===3?2600:5600)*(tank?1.4:support?.62:1));
       const d=t===1?Math.max(3,Math.round(u.dmg*.52)):t===2?Math.max(5,Math.round(u.dmg*.70)):Math.round((t===3?125:270)*(tank?1.15:u.lobber?1.4:1));
       u.standardHp=h;u.standardDmg=d;u.hp=h*(c.traits.quality||1);u.dmg=d*(c.traits.quality||1);
       u.pop=c.traits.pop||1;u.costFactor=c.traits.price||1;u.foodDiscount=c.traits.foodDiscount||1;
