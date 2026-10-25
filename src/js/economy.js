@@ -1,9 +1,10 @@
 /* Four resources, physical workers and construction. Fixed-step deterministic state. */
 window.Econ = (()=>{
   const TYPES=['food','wood','gold','stone'];
-  const NAMES={food:'食物',wood:'木头',gold:'黄金',stone:'石头',idle:'待命'};
+  const NAMES={food:'食物',wood:'木头',gold:'黄金',stone:'石头',idle:'待命',repair:'维修基地'};
   const BUILDINGS={house:{name:'民房',cost:{wood:80},time:9,pop:50},barracks:{name:'兵营',cost:{wood:150},time:14,hp:650},town_center:{name:'城镇中心',cost:{wood:200,stone:100},time:20,hp:900},castle:{name:'基地箭槽',cost:{wood:80,stone:180},time:16,hp:4500,mounted:true,age:2},bombard:{name:'基地炮槽',cost:{stone:260,gold:160},time:22,hp:4500,mounted:true,age:3},mill:{name:'资源工坊',cost:{wood:120,stone:50},time:12}};
-  const AGES=[null,{food:300,gold:180},{food:750,gold:450},{food:1400,gold:900}];
+  for(const def of Object.values(BUILDINGS))for(const k of Object.keys(def.cost))def.cost[k]*=2;
+  const AGES=[null,{food:900,gold:540},{food:2625,gold:1575},{food:5600,gold:3600}];
   const ageHp=[0,0,4000,6500,10000];
   const workerPopulation=p=>CIVS[p.civId].traits.pop||1;
   const workerPrice=p=>({food:Math.round(50*(CIVS[p.civId].traits.price||1))});
@@ -24,7 +25,7 @@ window.Econ = (()=>{
   function init(p){Object.assign(p,{food:240,wood:200,gold:130,stone:70,workers:[],nextWorker:1,nextOrder:1,workerQueue:[],sites:[],nextSite:1,age:1,research:null,scrap:0,biomass:0,gathered:{food:0,wood:0,gold:0,stone:0},income:0});['food','food','food','wood','wood','wood','gold','stone'].forEach(j=>addWorker(p,j));}
   function lanes(p,type){
     const kind=type==='army'?'barracks':'town_center',name=BUILDINGS[kind].name;
-    const list=[{id:type+':base',kind,name:name+' 1 · 初始',x:p.baseX+(type==='army'?(p.team==='hk'?55:-55):0),siteId:null}];
+    const list=p.baseRuined||p.baseHp<=0?[]:[{id:type+':base',kind,name:name+' 1 · 初始',x:p.baseX+(type==='army'?(p.team==='hk'?55:-55):0),siteId:null}];
     for(const s of p.sites)if(s.kind===kind&&s.done&&s.hp>0)list.push({id:type+':'+s.id,kind,name:name+' '+(list.length+1),x:s.x,siteId:s.id});
     return list;
   }
@@ -63,8 +64,16 @@ window.Econ = (()=>{
     const remaining=queue.filter(q=>q.ready>now);if(type==='army')p.queue=remaining;else p.workerQueue=remaining;
     return ready;
   }
-  function buildCost(p,kind){const c={...BUILDINGS[kind].cost};if(kind==='house'&&CIVS[p.civId].bonus==='housing')c.wood=60;return c;}
+  function buildCost(p,kind){const c={...BUILDINGS[kind].cost};if(kind==='house'&&CIVS[p.civId].bonus==='housing')c.wood=120;return c;}
   function action(state,p,a){
+    if(a.op==='repair_base'){
+      const target=state.players[a.targetSeat??p.seat],count=a.count??1;
+      if(!target||target.team!==p.team||target.resigned||target.baseHp>=target.baseHpMax)return {ok:false,err:'请选择尚需维修的友方基地'};
+      if(!Number.isInteger(count)||count<1||count>100)return {ok:false,err:'维修农民数量无效'};
+      const workers=p.workers.filter(w=>w.job!=='build'&&!(w.job==='repair'&&w.repairSeat===target.seat)).sort((a,b)=>(a.job!=='idle')-(b.job!=='idle')||a.id-b.id).slice(0,count);
+      if(!workers.length)return {ok:false,err:'没有可调遣的维修农民'};
+      for(const w of workers){if(w.job!=='repair')w.returnJob=w.job;w.job='repair';w.repairSeat=target.seat;w.site=null;w.phase='walk';}return {ok:true};
+    }
     if(a.op==='worker'){
       return enqueue(p,'worker',state.time,{duration:workerTime(p),cost:workerPrice(p),pop:workerPopulation(p)},a.laneId);
     }
@@ -87,7 +96,7 @@ window.Econ = (()=>{
       if(!ws.length&&a.workerId==null)ws=p.workers.filter(w=>w.job!==a.job&&w.job!=='build').sort((a,b)=>p.workers.filter(w=>w.job===b.job).length-p.workers.filter(w=>w.job===a.job).length).slice(0,1);
       if(!ws.length)return {ok:false,err:'没有可调遣的农民'};
       if(a.all)ws=p.workers.filter(w=>w.job!=='build');
-      ws.forEach(w=>{w.job=a.job;w.phase='walk';});return {ok:true};
+      ws.forEach(w=>{w.job=a.job;w.repairSeat=null;w.phase='walk';});return {ok:true};
     }
     if(a.op==='construct'){
       const def=BUILDINGS[a.kind],slot=a.slot;
@@ -114,23 +123,27 @@ window.Econ = (()=>{
     return {ok:false,err:'未知经济指令'};
   }
   function tick(state,p,dt){
-    if(p.baseHp<=0)return;
-    if(p.research&&p.research.ready<=state.time){p.age=p.research.age;p.built[['','hq','tech_a','tech_b','tech_c'][p.age]]=1;const hp=ageHp[p.age];p.baseHpMax+=hp;p.baseHp+=hp;p.ageCompletedAt=state.time;p.research=null;}
+    if(p.resigned)return;
+    if(p.baseRuined&&p.research){p.research.ready+=dt;p.research.started+=dt;}
+    if(!p.baseRuined&&p.research&&p.research.ready<=state.time){p.age=p.research.age;p.built[['','hq','tech_a','tech_b','tech_c'][p.age]]=1;const hp=ageHp[p.age];p.baseHpMax+=hp;p.baseHp+=hp;p.ageCompletedAt=state.time;p.research=null;}
     for(const q of complete(p,'worker',state.time)){p.pop-=q.pop;const lane=lanes(p,'worker').find(l=>l.id===q.laneId);addWorker(p,'food',lane?.x??p.baseX);}
     const rate=4.5*(CIVS[p.civId].baseIncome/5.5)*(CIVS[p.civId].traits.gather||1)*((p.gatherUntil||0)>state.time?1.35:1)*(1+p.sites.filter(s=>s.done&&s.kind==='mill').length*.18)*(1+(p.income||0)*.025);
     for(const w of p.workers){
       const site=w.job==='build'?p.sites.find(s=>s.id===w.site):null;
-      const target=site?(BUILDINGS[site.kind].mounted?p.baseX:site.x):TYPES.includes(w.job)?resourceX(p,w.job):p.baseX+(p.team==='hk'?-24:24);
+      const repair=w.job==='repair'?state.players[w.repairSeat]:null;
+      if(w.job==='repair'&&(!repair||repair.resigned||repair.baseHp>=repair.baseHpMax)){w.job=w.returnJob||'idle';w.repairSeat=null;w.phase='walk';continue;}
+      const target=repair?repair.baseX:site?(BUILDINGS[site.kind].mounted?p.baseX:site.x):TYPES.includes(w.job)?resourceX(p,w.job):p.baseX+(p.team==='hk'?-24:24);
       const d=target-w.x;
       if(Math.abs(d)>2){w.x+=Math.sign(d)*Math.min(Math.abs(d),64*dt);w.phase='walk';continue;}
       w.phase=w.job==='idle'?'idle':'work';w.actionTime+=dt;
+      if(repair){repair.baseHp=Math.min(repair.baseHpMax,Math.max(0,repair.baseHp)+45*dt);continue;}
       if(TYPES.includes(w.job)){const n=rate*dt;p[w.job]+=n;p.gathered[w.job]+=n;p.earned+=n;}
       if(site&&!site.done){site.progress+=dt/BUILDINGS[site.kind].time;
         if(site.progress>=1){site.progress=1;site.done=true;p.buildingsBuilt++;if(site.kind==='house'){p.popCap+=BUILDINGS.house.pop;p.built.pop=(p.built.pop||0)+1;}if(BUILDINGS[site.kind].mounted)p.built.castle=(p.built.castle||0)+1;w.job=w.returnJob||'idle';w.site=null;w.phase='walk';}
       }else if(w.job==='build'){w.job=w.returnJob||'idle';w.site=null;}
     }
     // Defensive slots fire from the main base; nothing stands in the combat lane.
-    for(const site of p.sites){if(!site.done||!BUILDINGS[site.kind].mounted)continue;site.cd-=dt;
+    for(const site of p.sites){if(p.baseRuined||p.baseHp<=0||!site.done||!BUILDINGS[site.kind].mounted)continue;site.cd-=dt;
       const cannon=site.kind==='bombard',range=cannon?440:300;
       const enemies=state.units.filter(u=>u.team!==p.team&&u.hp>0&&Math.abs(u.x-p.baseX)<range).sort((a,b)=>Math.abs(a.x-p.baseX)-Math.abs(b.x-p.baseX)||a.id-b.id);
       if(!enemies[0]||site.cd>0)continue;
@@ -138,7 +151,7 @@ window.Econ = (()=>{
       for(const target of enemies.slice(0,cannon?1:2)){
         if(cannon){for(const u of enemies)if(Math.abs(u.x-target.x)<80)Sim.damageUnit(state,u,damage,null);}
         if(!cannon)Sim.damageUnit(state,target,damage,null);
-        state.projectiles.push({id:state.nextProjectileId++,kind:cannon?'molotov':'base_bullet',team:p.team,x_from:site.x,y_from:p.row*60+slotOffsetY(site.slot),x_to:target.x,y_to:target.y-20,t:0,dur:cannon?.55:.18,seat:p.seat,fromRow:p.row,toRow:target.row,splash:cannon?80:0});
+        state.projectiles.push({id:state.nextProjectileId++,kind:cannon?'molotov':'base_bullet',team:p.team,x_from:site.x,y_from:p.row*60+slotOffsetY(site.slot),x_to:target.x,y_to:War.aimY(target),t:0,dur:cannon?.55:.18,seat:p.seat,fromRow:p.row,toRow:target.row,splash:cannon?80:0});
       }
       site.cd=(cannon?2.8:.75)/boosted;site.lastShot=state.time;
     }

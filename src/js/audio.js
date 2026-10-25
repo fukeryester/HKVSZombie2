@@ -2,7 +2,7 @@
    Audio follows confirmed simulation events; it never writes to simulation state. */
 window.Sound=(()=>{
   let ctx,master,musicBus,fxBus,analyser,noise,nextBeat=0,step=0,timer,muted=false,musicOn=true,scene='menu',paused=false,lastState=null,lastUI=-1,voices=0,windowAt=0,windowCount=0;
-  const attacked=new Map(),skills=new Set(),stats={musicNotes:0,attacks:0,skills:0,ui:0,peakVoices:0};
+  const attacked=new Map(),skills=new Set(),stats={musicNotes:0,attacks:0,skills:0,warAttacks:0,critical:0,ui:0,peakVoices:0};
   try{muted=localStorage.getItem('hkvsz2.muted')==='1';musicOn=localStorage.getItem('hkvsz2.music')!=='0';}catch{}
   const hash=s=>[...s].reduce((n,c)=>(Math.imul(n,31)+c.charCodeAt(0))>>>0,7),hz=n=>440*2**((n-69)/12);
   function unlock(){if(!ctx){try{
@@ -59,6 +59,11 @@ window.Sound=(()=>{
       default:hiss(t,.13,.06,1100*f,2);note(180*f,t,.13,.035,'sawtooth',fxBus,65);
     }
   }
+  function beastAttack(kind){if(!ctx||muted||paused||document.hidden||voices>28)return;const t=ctx.currentTime+.005;stats.warAttacks++;
+    if(kind==='train'){for(let i=0;i<3;i++){hiss(t+i*.035,.06,.07,1900);note(95,t+i*.035,.07,.04,'square',fxBus,45);}}
+    else if(kind==='zeppelin'){note(90,t,.4,.12,'triangle',fxBus,28);hiss(t,.4,.09,260);}
+    else if(kind==='mech'){note(340,t,.16,.07,'sawtooth',fxBus,80);hiss(t,.15,.07,1300);}
+  }
   const civRoots={hk_finance:76,hk_slum:62,hk_police:69,hk_university:81,hk_wild:57,hk_gang:65,zom_classic:43,zom_ghost:73,zom_bio:49,zom_robot:85,zom_necro:38,zom_asym:46};
   function skill(cid,id){if(!ctx||muted||paused)return;stats.skills++;const t=ctx.currentTime+.01,root=civRoots[cid]||60,sk=SKILLS[id],index=CIVS[cid].skills.indexOf(id);const organic=/necro|asym|classic|bio/.test(cid),machine=cid==='zom_robot';
     const intervals=cid==='hk_wild'?[0,7,12,7]:cid==='zom_ghost'?[0,1,7,13]:organic?[0,1,6,3]:machine?[0,12,7,19]:[0,4,7,12];
@@ -67,10 +72,18 @@ window.Sound=(()=>{
     if(sk.kind==='crossfire'||sk.kind==='emp_grid'||sk.kind==='overclock')hiss(t+.15,.22,.08,2000);
   }
   function ui(type='click'){const a=unlock();if(!a||muted)return;const now=a.currentTime;if(now-lastUI<.06)return;lastUI=now;stats.ui++;if(type==='win')[0,4,7,12].forEach((n,i)=>note(hz(72+n),now+i*.11,.26,.06,'triangle'));else note(type==='error'?160:460,now,.07,.025,'sine',fxBus,type==='error'?80:300);}
+  function critical(type,data={}){if(!ctx||muted||document.hidden)return;stats.critical++;const t=ctx.currentTime+.01;
+    if(type==='base_hit'){for(let i=0;i<3;i++)note(i%2?620:920,t+i*.13,.12,.10,'square');}
+    else if(type==='base_restored'){[0,7,12,16].forEach((n,i)=>note(hz(60+n),t+i*.08,.25,.07,'triangle'));}
+    else if(type==='war_mech_skill'){[130,260,390,780].forEach((f,i)=>note(f,t+i*.07,.25,.08,'sawtooth'));}
+    else if(type==='war_summon'){[0,7,12,19,24].forEach((n,i)=>note(hz(data.team==='hk'?36+n:30+n),t+i*.12,.6,.10,data.team==='hk'?'square':'sawtooth'));hiss(t,.5,.15,280);}
+    else{note(type==='war_cyst_burst'?55:85,t,.55,.23,'sawtooth',fxBus,22);hiss(t,.55,.22,type==='war_cyst_burst'?600:180);for(let i=0;i<3;i++)hiss(t+.08*i,.28,.08,1400+i*800);}
+  }
   function tick(state,screen,isPaused){scene=screen;paused=!!isPaused;if(!ctx)return;
     if(state!==lastState){lastState=state;attacked.clear();skills.clear();}
     if(!state||screen!=='play'||paused||document.hidden)return;
-    for(const u of state.units){if(u.atkFxTime<0||state.time-u.atkFxTime>.25||attacked.get(u.id)===u.atkFxTime)continue;attacked.set(u.id,u.atkFxTime);attack(u.civId,u.unitId);}
+    for(const u of state.units){if(u.atkFxTime<0||state.time-u.atkFxTime>.25||attacked.get(u.id)===u.atkFxTime)continue;attacked.set(u.id,u.atkFxTime);if(u.beast)beastAttack(u.beast);else attack(u.civId,u.unitId);}
+    for(const e of state._events||[]){if(e.type!=='skill'&&state.time-e.time<.4){const k=e.type+'/'+e.time+'/'+e.data.seat;if(!skills.has(k)){skills.add(k);if(e.type!=='base_hit'||state.players[e.data.seat]?.team===state.players[window.HKVZ2?.app.seat??0]?.team)critical(e.type,e.data);}}}
     for(const e of state._events||[]){if(e.type!=='skill'||state.time-e.time>.4)continue;const key=e.time+'/'+e.data.seat+'/'+e.data.skill;if(skills.has(key))continue;skills.add(key);skill(state.players[e.data.seat].civId,e.data.skill);}
     if(skills.size>100){skills.clear();for(const e of state._events||[])if(e.type==='skill')skills.add(e.time+'/'+e.data.seat+'/'+e.data.skill);}
     const ids=new Set(state.units.map(u=>u.id));for(const id of attacked.keys())if(!ids.has(id))attacked.delete(id);
@@ -80,5 +93,5 @@ window.Sound=(()=>{
   function diagnostics(){let rms=0;if(analyser){const data=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(data);rms=Math.sqrt(data.reduce((n,x)=>n+x*x,0)/data.length);}return {...stats,context:ctx?.state||'locked',muted,musicOn,voices,rms};}
   document.addEventListener('pointerdown',unlock,{passive:true});document.addEventListener('keydown',unlock,{passive:true});document.addEventListener('click',e=>{if(e.target.closest('button'))ui();});
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&musicBus)musicBus.gain.setTargetAtTime(0,ctx.currentTime,.03);});
-  return {unlock,ui,tick,profile,attack,skill,setMuted,setMusic,diagnostics,get muted(){return muted;},get musicOn(){return musicOn;}};
+  return {unlock,ui,tick,profile,attack,beastAttack,skill,critical,setMuted,setMusic,diagnostics,get muted(){return muted;},get musicOn(){return musicOn;}};
 })();

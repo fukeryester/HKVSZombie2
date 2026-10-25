@@ -1,5 +1,6 @@
 window.AI={think(state,p,send){
-  if(p.baseHp<=0||state.over||state.time-p.last_ai_think<1.1)return;p.last_ai_think=state.time;
+  if(p.resigned||state.over||state.time-p.last_ai_think<1.1)return;p.last_ai_think=state.time;
+  if(p.baseRuined){if(p.workers.filter(w=>w.job==='repair'&&w.repairSeat===p.seat).length<4)send({seat:p.seat,op:'repair_base',targetSeat:p.seat,count:4});return;}
   const civ=CIVS[p.civId],t=state.time;const jobCounts=Object.fromEntries([...Econ.TYPES,'idle','build'].map(j=>[j,p.workers.filter(w=>w.job===j).length]));
   const go=a=>send({seat:p.seat,...a});
   const needHouse=p.pop>=p.popCap-4&&!p.sites.some(s=>s.kind==='house'&&!s.done);

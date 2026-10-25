@@ -79,12 +79,24 @@ try{
   assert.ok(await multiplayer[0].evaluate(()=>HKVZ2.app.state.units.every(u=>{const y=Renderer.point(u.x,u.y,u.row).y;return y>=460&&y<=558;})));
   console.log('PASS: 8 peers construct both facilities, train in parallel, remotely cancel orders and remain grounded');
   const skillOrders=[];for(const peer of multiplayer){skillOrders.push(await peer.evaluate(()=>{const a=HKVZ2.app,p=a.state.players[a.seat],index=p.civId==='zom_necro'?2:p.civId==='zom_robot'?1:0;const skill=CIVS[p.civId].skills[index];HKVZ2.dispatch({op:'skill',skill});return {seat:a.seat,skill};}));}
-  await multiplayer[0].waitForFunction(list=>list.every(({seat,skill})=>HKVZ2.app.state.players[seat].cd['skill_'+skill]>0),skillOrders);console.log('PASS: all eight peers activate faction abilities through protocol 5');
+  await multiplayer[0].waitForFunction(list=>list.every(({seat,skill})=>HKVZ2.app.state.players[seat].cd['skill_'+skill]>0),skillOrders);console.log('PASS: all eight peers activate faction abilities through protocol 6');
+  const crisisTick=await multiplayer[0].evaluate(()=>{const a=HKVZ2.app;a.paused=true;while(a.state.tick%3){a.network.beforeTick(a.state);Sim.tickSim(a.state,Sim.DT);a.network.afterTick(a.state);}return a.state.tick;});
+  await Promise.all(multiplayer.slice(1).map(p=>p.waitForFunction(t=>HKVZ2.app.state.tick===t,crisisTick)));
+  for(const p of multiplayer)await p.evaluate(()=>{const s=HKVZ2.app.state;s.players.forEach(q=>q.baseHp=q.baseHpMax*.08);s.players[0].baseHp=0;s.players[0].baseRuined=true;War.update(s);});
+  await multiplayer[0].evaluate(()=>HKVZ2.app.paused=false);
+  await Promise.all([multiplayer[0].evaluate(()=>HKVZ2.dispatch({op:'summon_beast',kind:'train'})),multiplayer[1].evaluate(()=>HKVZ2.dispatch({op:'summon_beast',kind:'mech'}))]);
+  await multiplayer[4].evaluate(()=>HKVZ2.dispatch({op:'summon_beast',kind:'portal'}));
+  await multiplayer[0].waitForFunction(()=>HKVZ2.app.state.war.teams.hk.used&&HKVZ2.app.state.war.teams.zom.used);
+  assert.equal(await multiplayer[0].evaluate(()=>HKVZ2.app.state.units.filter(u=>u.beast&&u.team==='hk').length),1);
+  await multiplayer[1].waitForFunction(()=>document.getElementById('toast').textContent.includes('机会已用尽'));
+  await multiplayer[0].evaluate(()=>HKVZ2.dispatch({op:'repair_base',targetSeat:0,count:3}));await multiplayer[1].evaluate(()=>HKVZ2.dispatch({op:'repair_base',targetSeat:0,count:3}));
+  await multiplayer[0].waitForFunction(()=>HKVZ2.app.state.players[0].baseHp>100&&HKVZ2.app.state.units.some(u=>!u.beast&&u.popCost===0));
+  await multiplayer[0].screenshot({path:'artifacts/war-network-4v4.png',fullPage:true});console.log('PASS: eight peers share one summon per team, reject a competing choice, repair a ruined ally and replay portal reinforcements');
   const host=multiplayer[0];const target=await host.evaluate(()=>{const {app}=HKVZ2;app.paused=true;while(app.state.tick%3){app.network.beforeTick(app.state);Sim.tickSim(app.state,Sim.DT);app.network.afterTick(app.state);}return app.state.tick;});
   await Promise.all(multiplayer.slice(1).map(p=>p.waitForFunction(t=>HKVZ2.app.state.tick===t,target)));
   const states=await Promise.all(multiplayer.map(p=>p.evaluate(()=>JSON.stringify(HKVZ2.app.state))));states.slice(1).forEach(s=>assert.equal(s,states[0],'all 8 simulations must match exactly'));
   assert.ok(Math.max(...messageCounts.values())<=20,'relay 20 messages/second limit');console.log(`PASS: real SDK + 8 browser sessions, identical complete states at tick ${target}, largest packet ${largest} bytes`);
-  await host.evaluate(()=>HKVZ2.app.paused=false);await multiplayer[7].evaluate(()=>HKVZ2.app.network.close());await host.waitForFunction(()=>HKVZ2.app.state.players[7].baseHp===0);assert.equal(await host.evaluate(()=>HKVZ2.app.state.over),false);
+  await host.evaluate(()=>HKVZ2.app.paused=false);await multiplayer[7].evaluate(()=>HKVZ2.app.network.close());await host.waitForFunction(()=>HKVZ2.app.state.players[7].resigned===true);assert.equal(await host.evaluate(()=>HKVZ2.app.state.over),false);
   await host.evaluate(()=>HKVZ2.app.network.close());await multiplayer[1].waitForFunction(()=>HKVZ2.app.aborted);assert.equal(await multiplayer[1].evaluate(()=>Progress.history().length),0);
   console.log('PASS: guest disconnect resigns only that seat; host disconnect aborts without ranked settlement');
   assert.deepEqual(errors,[]);console.log('PASS: no browser runtime errors');
