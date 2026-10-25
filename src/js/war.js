@@ -1,5 +1,6 @@
 /* Deterministic team comeback units and recoverable headquarters. */
 window.War=(()=>{
+  const ARRIVAL_CLEAR_RADIUS=320;
   const DEFS={
     zeppelin:{name:'齐柏林飞艇',team:'hk',hp:120000,dmg:3000,range:650,speed:24,atkCd:1.4,flying:true,bodyRadius:145,desc:'120000生命 · 仅远程可命中 · 空对地范围轰炸'},
     train:{name:'装甲列车',team:'hk',hp:80000,dmg:90,range:430,speed:105,atkCd:.18,bodyRadius:180,desc:'5节独立车厢，每节16000生命 · 加特林扫射 · 往返巡弋'},
@@ -14,16 +15,20 @@ window.War=(()=>{
   const alive=u=>u.hp>0;
   function teamTotal(s,team){const ps=s.players.filter(p=>p.team===team);let current=ps.reduce((n,p)=>n+Math.max(0,p.baseHp),0),maximum=ps.reduce((n,p)=>n+p.baseHpMax,0);for(const u of s.units)if(u.beast==='portal'&&u.team===team&&u.hp>0){current+=u.hp;maximum+=u.hpMax;}return {current,maximum,ratio:maximum?current/maximum:0};}
   function teamIsAI(s,team){const players=s.players.filter(p=>p.team===team);return players.length>0&&players.every(p=>p.isAI);}
-  function canSummon(s,p){const total=teamTotal(s,p.team);return !s.over&&(!p.isAI||teamIsAI(s,p.team))&&!p.resigned&&!s.war.teams[p.team].used&&total.current>0&&total.ratio<=.1+1e-10;}
+  function canSummon(s,p){const total=teamTotal(s,p.team);return !s.over&&(!p.isAI||teamIsAI(s,p.team))&&!p.resigned&&(p.gmBeastReady||!s.war.teams[p.team].used&&total.current>0&&total.ratio<=.1+1e-10);}
   function update(s){for(const team of ['hk','zom']){const t=teamTotal(s,team);s.war.teams[team].available=!s.war.teams[team].used&&t.current>0&&t.ratio<=.1+1e-10;}}
   function event(s,type,data){Sim.emitEvent(s,type,data);}
   function effect(s,kind,data,life=1){s.effects.push({id:s.nextEffectId++,kind,life,initLife:life,...data});}
   function summon(s,p,kind){const d=Object.hasOwn(DEFS,kind)?DEFS[kind]:null;if(!d||d.team!==p.team)return {ok:false,err:'请选择本阵营的战争巨兽'};if(p.isAI&&!teamIsAI(s,p.team))return {ok:false,err:'有真人的队伍由真人选择战争巨兽'};if(!canSummon(s,p))return {ok:false,err:s.war.teams[p.team].used?'友方已召唤战争巨兽，本局机会已用尽':'全队基地总耐久需不高于10%'};
-    const entry=s.war.teams[p.team];entry.used=true;entry.available=false;entry.kind=kind;entry.seat=p.seat;
+    const entry=s.war.teams[p.team];p.gmBeastReady=false;entry.used=true;entry.available=false;entry.kind=kind;entry.seat=p.seat;
     const x=kind==='cyst'?900:kind==='train'?Math.max(...s.players.filter(q=>q.team==='hk').map(q=>q.baseX))+110:p.baseX+(p.team==='hk'?110:-110);
     const u={id:s.nextUnitId++,seat:p.seat,team:p.team,civId:p.civId,unitId:'war_'+kind,beast:kind,def:d,x,y:p.row*60,row:p.row,dir:p.team==='hk'?1:-1,hp:d.hp,hpMax:d.hp,speed:d.speed,bodyRadius:d.bodyRadius,cdAtk:0,atkFxTime:-999,born:s.time,popCost:0,free:true,nextSkill:s.time+6,nextSpawn:s.time+1,lives:kind==='cyst'?3:1};
     if(kind==='train')u.parts=Array.from({length:5},(_,i)=>({id:i,hp:16000,maxHp:16000,cd:0}));s.units.push(u);entry.unitId=u.id;p.unitsBuilt++;
-    effect(s,'war_arrival',{x,y:u.y,row:u.row,team:p.team,beast:kind},3);event(s,'war_summon',{seat:p.seat,team:p.team,kind,unitId:u.id});return {ok:true};
+    // Execute ordinary troops directly; all war beasts remain immune to arrival clearing.
+    const victims=s.units.filter(t=>t.team!==p.team&&!t.beast&&t.hp>0&&Math.abs(t.x-p.baseX)<=ARRIVAL_CLEAR_RADIUS);
+    for(const t of victims){t.hp=0;effect(s,'war_purge',{x:t.x,y:t.y,row:t.row,flying:!!t.def.flying},1.1);}
+    effect(s,'war_counterattack',{x:p.baseX,y:p.row*60,row:p.row,team:p.team,r:ARRIVAL_CLEAR_RADIUS,cleared:victims.length},3.8);
+    effect(s,'war_arrival',{x,y:u.y,row:u.row,team:p.team,beast:kind},3);event(s,'war_summon',{seat:p.seat,team:p.team,kind,unitId:u.id,cleared:victims.length});return {ok:true};
   }
   function baseTargets(s,team){const list=s.players.filter(p=>p.team===team&&!p.resigned&&!p.baseRuined&&p.baseHp>0);for(const u of s.units)if(u.beast==='portal'&&u.team===team&&u.hp>0)list.push({baseX:u.x,baseHp:u.hp,baseHpMax:u.hpMax,row:u.row,seat:u.seat,team:u.team,warUnitId:u.id});return list;}
   function portalAlive(s,team){return s.players.some(p=>p.team===team&&!p.resigned)&&s.units.some(u=>u.beast==='portal'&&u.team===team&&u.hp>0);}
@@ -93,5 +98,5 @@ window.War=(()=>{
   }
   function updateBases(s){for(const p of s.players){if(p.baseHp<=0){p.baseHp=0;destroyed(s,p);}else if(p.baseRuined&&p.baseHp>=p.baseHpMax&&!p.resigned){p.baseRuined=false;event(s,'base_restored',{seat:p.seat});}}}
   function death(s,u){if(u.warDied)return;u.warDied=true;if(u.beast==='portal'){for(const t of s.units)if(t.team!==u.team&&t.hp>0&&Math.abs(t.x-u.x)<=230)percentDamage(s,t,.25);}effect(s,'war_death',{x:u.x,y:u.y,row:u.row,beast:u.beast},3);event(s,'war_destroyed',{seat:u.seat,kind:u.beast});}
-  return {DEFS,init,random,teamTotal,teamIsAI,canSummon,update,summon,baseTargets,portalAlive,targetable,aimY,trainParts,hit,percentDamage,block,tick,castMech,destroyed,updateBases,death};
+  return {DEFS,ARRIVAL_CLEAR_RADIUS,init,random,teamTotal,teamIsAI,canSummon,update,summon,baseTargets,portalAlive,targetable,aimY,trainParts,hit,percentDamage,block,tick,castMech,destroyed,updateBases,death};
 })();

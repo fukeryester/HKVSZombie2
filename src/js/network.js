@@ -29,7 +29,7 @@ window.BattleNet=class BattleNet{
   flush(){
     const item=this.outbox?.shift();
     if(!item||!this.client||this.client.ws?.readyState!==1){this.outTimer=null;return;}
-    const packet={protocol:8,...item.data};
+    const packet={protocol:9,...item.data};
     if(item.to)this.client.send(item.to,packet);else this.client.broadcast(packet);
     this.outTimer=setTimeout(()=>{this.outTimer=null;this.flush();},75);
   }
@@ -40,12 +40,12 @@ window.BattleNet=class BattleNet{
   bot(slot,civId){if(!this.host||this.playing)return;const side=slot<this.lobby.size?'hk':'zom';if(this.lobby.players[slot]&&!this.lobby.players[slot].isAI)return;this.lobby.players[slot]=civId?{name:'AI · '+CIVS[civId].name,team:side,civId,isAI:true,ready:true}:null;this.syncLobby();}
   start(){if(!this.host)return;const l=this.lobby;if(l.players.some(p=>!p||!p.ready))throw new Error('请填满座位并等待所有玩家准备');const config={seed:crypto.getRandomValues(new Uint32Array(1))[0],mode:`${l.size}v${l.size}`,ranked:l.ranked,session:HKVZId(),players:l.players.map((p,i)=>({...p,seat:i,row:i%l.size}))};this.session=config.session;this.playing=true;this.frameStart=0;this.sequence=0;this.broadcast({type:'start',config});this.emit('start',{config,seat:this.mySeat});}
   action(a){const requestId=++this.inputSerial,input={...a,requestId};if(this.host)this.enqueue(this.me,input);else this.send(this.hostId,{type:'input',session:this.session,action:input});return requestId;}
-  enqueue(from,a){if(!this.playing||!a||typeof a.op!=='string')return;const seat=this.lobby.players.findIndex(p=>p?.clientId===from);if(seat<0)return;const now=performance.now();let r=this.rate.get(from)||{time:now,n:0};if(now-r.time>1000)r={time:now,n:0};if(++r.n>18){this.result({seat,requestId:a.requestId},{ok:false,err:'操作过快，请稍后重试'});return;}this.rate.set(from,r);const clean={op:a.op,seat};if(Number.isSafeInteger(a.requestId)&&a.requestId>0)clean.requestId=a.requestId;for(const k of ['unit','kind','skill','job','laneId'])if(typeof a[k]==='string'&&a[k].length<70)clean[k]=a[k];for(const k of ['slot','workerId','siteId','orderId','targetSeat','count'])if(Number.isInteger(a[k]))clean[k]=a[k];this.pending.push(clean);}
+  enqueue(from,a){if(!this.playing||!a||typeof a.op!=='string')return;const seat=this.lobby.players.findIndex(p=>p?.clientId===from);if(seat<0)return;const now=performance.now();let r=this.rate.get(from)||{time:now,n:0};if(now-r.time>1000)r={time:now,n:0};if(++r.n>18){this.result({seat,requestId:a.requestId},{ok:false,err:'操作过快，请稍后重试'});return;}this.rate.set(from,r);if(a.op==='gm_beast'&&from!==this.hostId){this.result({seat,requestId:a.requestId},{ok:false,err:'联机GM仅限房主使用'});return;}const clean={op:a.op,seat};if(Number.isSafeInteger(a.requestId)&&a.requestId>0)clean.requestId=a.requestId;for(const k of ['unit','kind','skill','job','laneId'])if(typeof a[k]==='string'&&a[k].length<70)clean[k]=a[k];for(const k of ['slot','workerId','siteId','orderId','targetSeat','count'])if(Number.isInteger(a[k]))clean[k]=a[k];this.pending.push(clean);}
   beforeTick(state){const list=this.pending.splice(0);for(const a of list)this.apply(state,a);state.players.filter(p=>p.isAI).forEach(p=>AI.think(state,p,a=>this.apply(state,a)));}
   result(a,r){if(!Number.isSafeInteger(a.requestId)||a.requestId<=0)return;const item={seat:a.seat,requestId:a.requestId,ok:r.ok};if(!r.ok)item.error=r.err;if(a.seat===this.mySeat)this.emit('actionResult',item);else this.frameResults.push(item);}
   apply(state,a){const result=Sim.applyAction(state,a);if(result.ok){const {requestId,...command}=a;this.frameActions.push({tick:state.tick,a:command});}this.result(a,result);return result;}
   afterTick(state){if(state.tick%3!==0&&!state.over)return;const packet={type:'frame',session:this.session,seq:++this.sequence,from:this.frameStart,to:state.tick,actions:this.frameActions};if(this.frameResults.length)packet.results=this.frameResults;this.broadcast(packet);this.frameActions=[];this.frameResults=[];this.frameStart=state.tick;}
-  message(m){const d=m.data;if(!d)return;if(d.protocol!==8){this.emit('error',{error:'房间游戏版本不同，请所有玩家刷新最新版并重新建房。'});return;}
+  message(m){const d=m.data;if(!d)return;if(d.protocol!==9){this.emit('error',{error:'房间游戏版本不同，请所有玩家刷新最新版并重新建房。'});return;}
     if(d.type==='lobby'&&m.from===this.hostId&&!this.playing){if(!d.state||!Array.isArray(d.state.players)||d.state.players.length>8)return;this.lobby=d.state;this.emit('lobby',d.state);}
     else if(d.type==='choice'&&this.host)this.choice(m.from,d);
     else if(d.type==='ready'&&this.host&&!this.playing){const p=this.lobby.players.find(p=>p?.clientId===m.from);if(p){p.ready=!p.ready;this.syncLobby();}}

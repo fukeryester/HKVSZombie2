@@ -8,8 +8,9 @@ window.Progress=(()=>{
   function score(){return stats?.enabled?Number(stats.get('rank_score'))||0:profile.score;}
   async function init(){if(!BattleNet.gameId())return;stats=GameHubStats.connect();await stats.ready();if(stats.enabled)matches=GameHubMatches.connect();}
   function start(){round=matches?matches.start():null;}
-  function finish(state,seat,ranked){const p=state.players[seat],win=p.team===state.winner,pvp=state.players.some(q=>q.team!==p.team&&!q.isAI);const delta=ranked?(win?(pvp?30:15):-(pvp?25:15)):0;const after=Math.max(0,score()+delta);
+  function finish(state,seat,ranked){ranked=!!ranked&&!state.gmUsed;const p=state.players[seat],win=p.team===state.winner,pvp=state.players.some(q=>q.team!==p.team&&!q.isAI);const delta=ranked?(win?(pvp?30:15):-(pvp?25:15)):0;const after=Math.max(0,score()+delta);
     const result={id:HKVZId(),win,civId:p.civId,mode:state.mode,ranked,time:Math.round(state.time),kills:p.kills,units:p.unitsBuilt,workers:p.workers.length,age:p.age,gathered:Math.round(Object.values(p.gathered).reduce((a,b)=>a+b,0)),at:new Date().toISOString(),delta:after-score(),score:after};
+    if(state.gmUsed)return {...result,gm:true};
     profile.history.unshift(result);profile.history=profile.history.slice(0,30);if(!stats?.enabled)profile.score=after;persist();
     if(stats?.enabled){stats.inc('matches_total',1);stats.inc(win?'wins_total':'losses_total',1);stats.inc('kills_total',p.kills);stats.inc('units_built_total',p.unitsBuilt);stats.inc('workers_trained',Math.max(0,p.workers.length-8));stats.inc('resources_gathered',result.gathered);stats.inc('civ_used_'+p.civId,1);
       if(ranked){stats.set('rank_score',after);stats.set('rank_peak',Math.max(stats.get('rank_peak')||0,after));stats.submit('board_rank',after,{title:title(after)});}

@@ -58,6 +58,12 @@ window.WarArt=(()=>{
         if(blood){c.fillStyle=`rgba(134,16,55,${Math.max(0,.43-k*.43)})`;c.fillRect(0,0,1800,590);glow(c,900,130,180,'#e8577955');ellipse(c,900,120,69,69,'#d38c86');}
         glow(c,x,y-45,Math.max(30,r*(.4+k)),blood?'#e8668899':'#ffd59baa');if(k<.15){c.globalAlpha=(.15-k)*3;c.fillStyle=blood?'#f7a8ba':'#ffe3b3';c.fillRect(0,0,1800,590);c.globalAlpha=1;}
         ring(c,x,y-8,r*(.15+k),blood?'#fa9eae':'#f5c386',Math.max(1,8*(1-k)));for(let i=0;i<36;i++){const a=i*2.399,dist=(45+i%7*17)*k*2.7,xx=x+Math.cos(a)*dist,yy=y-45+Math.sin(a)*dist-k*(1-k)*160;c.globalAlpha=Math.max(0,1-k);R(c,xx,yy,5+(i%4)*3,5+(i%3)*4,blood?(i%2?'#f0a2ae':'#73344b'):(i%2?'#f1bf76':'#e88665'));}
+      }else if(e.kind==='war_counterattack'){
+        const fade=Math.min(1,k*12,Math.max(0,(1-k)*4)),r=e.r*Math.min(1,k*3);c.globalAlpha=fade;glow(c,x,y-30,Math.max(30,r),'#f2cf8055');ring(c,x,y-8,r,gold,Math.max(1,7*(1-k)));ring(c,x,y-8,r*.78,'#fff2bd',2);
+        for(let i=0;i<18;i++){const a=i*Math.PI/9;L(c,x+Math.cos(a)*r*.85,y-8+Math.sin(a)*r*.32,x+Math.cos(a)*r,y-8+Math.sin(a)*r*.4,gold,3);}
+        R(c,535,95,730,51,'#13242de8');L(c,535,95,1265,95,gold,2);text(c,'反攻号角 · 基地周边敌军肃清',900,125,25,'#ffe5a5');text(c,'肃清 '+e.cleared+' 名敌军',900,168,15,gold);
+      }else if(e.kind==='war_purge'){
+        const yy=y-(e.flying?220:35);c.globalAlpha=1-k;glow(c,x,yy,45+k*60,'#ffe0a2aa');L(c,x-22-k*25,yy+50,x+22+k*25,yy-65,'#fff2bf',6*(1-k));ring(c,x,yy,15+k*60,gold,3);
       }else if(e.kind==='war_arrival'){
         const fade=Math.sin(Math.min(1,k)*Math.PI);c.globalAlpha=fade*.7;const g=c.createLinearGradient(x-190,0,x+190,0);g.addColorStop(0,'#83ebed00');g.addColorStop(.5,e.team==='hk'?'#c0fff1aa':'#e79edfaa');g.addColorStop(1,'#83ebed00');c.fillStyle=g;c.fillRect(x-190,0,380,y);ring(c,x,y-8,80+k*220,e.team==='hk'?cyan:'#d69edc',5);c.globalAlpha=fade;text(c,'战争巨兽降临',900,74,35,e.team==='hk'?cyan:'#f3a6cb');
       }else if(e.kind==='war_tracer'||e.kind==='war_bomb'||e.kind==='war_missile'){

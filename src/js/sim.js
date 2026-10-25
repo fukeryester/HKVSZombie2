@@ -45,6 +45,7 @@ function createInitialState(config) {
     seed,
     mode,
     over: false,
+    gmUsed: false,
     winner: null,             // "hk" | "zom"
     over_time: 0,             // 结束时的 time
     players: [],              // 见下（含 baseHp / baseHpMax / baseX）
@@ -75,6 +76,7 @@ function createInitialState(config) {
       seat: i,                  // 全局座位 (0..N-1)
       team: p.team,
       isAI: !!p.isAI,
+      gmBeastReady: false,
       civId: p.civId,
       name: p.name || (p.isAI ? "AI" : "Player " + (i+1)),
       row,                      // 0=前, 1=后
@@ -193,6 +195,7 @@ function applyAction(state, act) {
   if (!p) return { ok:false, err:"no seat" };
   const civ = CIVS[p.civId];
   if(p.resigned)return {ok:false,err:'该玩家已退出战斗'};
+  if(act.op==='gm_beast'){if(p.isAI)return {ok:false,err:'AI不能开启GM'};state.gmUsed=true;p.gmBeastReady=true;return {ok:true};}
   if(act.op==='summon_beast')return War.summon(state,p,act.kind);
   if((p.baseHp<=0||p.baseRuined)&&!['repair_base','assign','construct','resume','demolish','cancel_training','worker','spawn','resign'].includes(act.op))return {ok:false,err:'请先派农民维修基地'};
   if (["worker","assign","construct","resume","age","cancel_training","demolish","repair_base"].includes(act.op)) return Econ.action(state,p,act);
