@@ -186,7 +186,7 @@ function applyAction(state, act) {
   if (!p) return { ok:false, err:"no seat" };
   const civ = CIVS[p.civId];
   if (p.baseHp <= 0) return {ok:false,err:"基地已被摧毁"};
-  if (["worker","assign","construct","resume","age","cancel_training"].includes(act.op)) return Econ.action(state,p,act);
+  if (["worker","assign","construct","resume","age","cancel_training","demolish"].includes(act.op)) return Econ.action(state,p,act);
 
   switch (act.op) {
     case "build": return {ok:false,err:"请派农民建造"};
@@ -788,13 +788,6 @@ function tickSim(state, dt) {
     let nearBase = nearestBase(state, enemyTeam, u.x);
     let targetCastle = null;
     let distToBase = nearBase ? Math.abs(nearBase.baseX - u.x) : Infinity;
-    for (const owner of state.players) {
-      if(owner.team===u.team || owner.baseHp<=0) continue;
-      for(const site of owner.sites){
-        const d=Math.abs(site.x-u.x);
-        if(site.kind==='castle'&&site.done&&site.hp>0&&d<distToBase){distToBase=d;targetCastle=site;nearBase={baseX:site.x,seat:owner.seat,row:owner.row};}
-      }
-    }
     let targetBase = false;
     if (!target || distToBase < bestDist - 20) {
       targetBase = true;

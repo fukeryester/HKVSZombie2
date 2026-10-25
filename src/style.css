@@ -6,3 +6,5 @@
 .research-hud{padding:10px 22px;background:#20373d;border-bottom:1px solid #648a81}.research-hud[hidden]{display:none}.research-hud>div:first-child{display:flex;justify-content:space-between;gap:12px;font-size:12px;margin-bottom:6px;color:#d6e9d4}.research-progress{height:9px;background:#101f29;border:1px solid #55796c}.research-progress i{display:block;height:100%;background:linear-gradient(90deg,#6c9e90,#d9cd8b);transition:width .18s linear}.faction-trait{font-size:12px;color:#b7c9c1;line-height:1.7;margin:0 0 12px}
 
 .unit-stats{display:block;padding:5px 6px 8px;color:#a7bbb4;font-size:9px;white-space:normal;line-height:1.4}@media(max-width:720px){.unit-stats{font-size:8px;padding:4px}}
+
+.site-management{font-size:11px;color:#a3b9b2;margin-top:12px}.site-management>p{line-height:1.7;margin-bottom:10px}.site-entry{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px;border-bottom:1px solid #31434c}.site-entry button{padding:6px 12px;color:#e4b29a;flex-shrink:0}button{touch-action:manipulation}.sound-music{font-size:10px!important;min-width:36px}

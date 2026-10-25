@@ -12,7 +12,7 @@ window.Factions=(()=>{
     case 'colossal_molt':return own(s,p).some(u=>!u.molted)?'':'需要尚未蜕变的本方部队';
     case 'asymmetric_grasp':return foes(s,p).some(u=>u.def.tier<=2)?'':'没有可牵引的低阶敌兵';
     case 'crossfire':case 'emp_grid':return foes(s,p).length?'':'没有可作用的敌军';
-    case 'fortress_watch':return p.sites.some(x=>x.kind==='castle'&&x.done&&x.hp>0)?'':'需要完工的城堡';
+    case 'fortress_watch':return p.sites.some(x=>Econ.BUILDINGS[x.kind].mounted&&x.done&&x.hp>0)?'':'需要完工的基地防御槽';
     case 'triad_ambush':return p.pop+8<=p.popCap?'':'伏击需要8个空闲人口';
     default:return '';
   }}
@@ -26,7 +26,7 @@ window.Factions=(()=>{
       case 'emp_grid':for(const u of enemies){if(u.def.machine)u.stunnedUntil=Math.max(u.stunnedUntil||0,until(5));else{u.slowUntil=until(10);u.slowMul=.45;}mark(s,u,'spark');}break;
       case 'tribal_hunt':p.food+=350;p.wood+=180;p.earned+=530;break;
       case 'shield_wall':p.wallUntil=until(18);break;
-      case 'fortress_watch':p.watchUntil=until(25);p.sites.filter(x=>x.kind==='castle'&&x.done&&x.hp>0).forEach(x=>x.hp=Math.min(x.maxHp,x.hp+x.maxHp*.35));break;
+      case 'fortress_watch':p.watchUntil=until(25);p.baseHp=Math.min(p.baseHpMax,p.baseHp+p.baseHpMax*.15);break;
       case 'black_market':p.food-=150;p.wood-=150;p.spent+=300;p.gold+=500;p.earned+=500;break;
       case 'crossfire':for(const u of enemies.slice(0,5)){u.hp-=700;u.slowUntil=until(5);u.slowMul=.5;mark(s,u,'fire_burst');}break;
       case 'triad_ambush':{const b=s.players.filter(x=>x.team!==p.team&&x.baseHp>0).sort((a,b)=>Math.abs(a.baseX-p.baseX)-Math.abs(b.baseX-p.baseX))[0];if(b)for(let i=0;i<8;i++)spawn(s,p,i<4?'blade':'pistol',{free:true,x:b.baseX+(p.team==='hk'?-1:1)*(260+i*9)});break;}

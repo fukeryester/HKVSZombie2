@@ -2,7 +2,7 @@ window.HKVZId=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toS
 /* Host schedules all actions at fixed ticks. Clients advance only on ordered 3-tick batches.
    Sender identity comes from the platform relay, never from a payload's claimed seat. */
 window.BattleNet=class BattleNet{
-  constructor(emit){this.emit=emit;this.room=null;this.client=null;this.lobby=null;this.hostId=null;this.playing=false;this.pending=[];this.frameActions=[];this.frameStart=0;this.sequence=0;this.lastSeq=0;this.lastReceive=0;this.lastPing=0;this.session=null;this.rate=new Map();}
+  constructor(emit){this.emit=emit;this.room=null;this.client=null;this.lobby=null;this.hostId=null;this.playing=false;this.pending=[];this.frameActions=[];this.frameResults=[];this.inputSerial=0;this.frameStart=0;this.sequence=0;this.lastSeq=0;this.lastReceive=0;this.lastPing=0;this.session=null;this.rate=new Map();}
   static gameId(){return /^\/g\/([^/]+)\//.exec(location.pathname)?.[1]||window.GAMEHUB_GAME_ID||'';}
   get host(){return this.client?.you?.client_id===this.hostId;}
   get me(){return this.client?.you?.client_id;}
@@ -29,7 +29,7 @@ window.BattleNet=class BattleNet{
   flush(){
     const item=this.outbox?.shift();
     if(!item||!this.client||this.client.ws?.readyState!==1){this.outTimer=null;return;}
-    const packet={protocol:4,...item.data};
+    const packet={protocol:5,...item.data};
     if(item.to)this.client.send(item.to,packet);else this.client.broadcast(packet);
     this.outTimer=setTimeout(()=>{this.outTimer=null;this.flush();},75);
   }
@@ -39,18 +39,19 @@ window.BattleNet=class BattleNet{
   ready(){if(this.host){const p=this.lobby.players[this.mySeat];p.ready=!p.ready;this.syncLobby();}else this.send(this.hostId,{type:'ready'});}
   bot(slot,civId){if(!this.host||this.playing)return;const side=slot<this.lobby.size?'hk':'zom';if(this.lobby.players[slot]&&!this.lobby.players[slot].isAI)return;this.lobby.players[slot]=civId?{name:'AI · '+CIVS[civId].name,team:side,civId,isAI:true,ready:true}:null;this.syncLobby();}
   start(){if(!this.host)return;const l=this.lobby;if(l.players.some(p=>!p||!p.ready))throw new Error('请填满座位并等待所有玩家准备');const config={seed:crypto.getRandomValues(new Uint32Array(1))[0],mode:`${l.size}v${l.size}`,ranked:l.ranked,session:HKVZId(),players:l.players.map((p,i)=>({...p,seat:i,row:i%l.size}))};this.session=config.session;this.playing=true;this.frameStart=0;this.sequence=0;this.broadcast({type:'start',config});this.emit('start',{config,seat:this.mySeat});}
-  action(a){if(this.host)this.enqueue(this.me,a);else this.send(this.hostId,{type:'input',session:this.session,action:a});}
-  enqueue(from,a){if(!this.playing||!a||typeof a.op!=='string')return;const seat=this.lobby.players.findIndex(p=>p?.clientId===from);if(seat<0)return;const now=performance.now();let r=this.rate.get(from)||{time:now,n:0};if(now-r.time>1000)r={time:now,n:0};if(++r.n>18)return;this.rate.set(from,r);const clean={op:a.op,seat};for(const k of ['unit','kind','skill','job','laneId'])if(typeof a[k]==='string'&&a[k].length<70)clean[k]=a[k];for(const k of ['slot','workerId','siteId','orderId'])if(Number.isInteger(a[k]))clean[k]=a[k];this.pending.push(clean);}
+  action(a){const requestId=++this.inputSerial,input={...a,requestId};if(this.host)this.enqueue(this.me,input);else this.send(this.hostId,{type:'input',session:this.session,action:input});return requestId;}
+  enqueue(from,a){if(!this.playing||!a||typeof a.op!=='string')return;const seat=this.lobby.players.findIndex(p=>p?.clientId===from);if(seat<0)return;const now=performance.now();let r=this.rate.get(from)||{time:now,n:0};if(now-r.time>1000)r={time:now,n:0};if(++r.n>18){this.result({seat,requestId:a.requestId},{ok:false,err:'操作过快，请稍后重试'});return;}this.rate.set(from,r);const clean={op:a.op,seat};if(Number.isSafeInteger(a.requestId)&&a.requestId>0)clean.requestId=a.requestId;for(const k of ['unit','kind','skill','job','laneId'])if(typeof a[k]==='string'&&a[k].length<70)clean[k]=a[k];for(const k of ['slot','workerId','siteId','orderId'])if(Number.isInteger(a[k]))clean[k]=a[k];this.pending.push(clean);}
   beforeTick(state){const list=this.pending.splice(0);for(const a of list)this.apply(state,a);state.players.filter(p=>p.isAI).forEach(p=>AI.think(state,p,a=>this.apply(state,a)));}
-  apply(state,a){const result=Sim.applyAction(state,a);if(result.ok)this.frameActions.push({tick:state.tick,a});else if(a.seat===this.mySeat)this.emit('actionError',{error:result.err});return result;}
-  afterTick(state){if(state.tick%3!==0&&!state.over)return;const packet={type:'frame',session:this.session,seq:++this.sequence,from:this.frameStart,to:state.tick,actions:this.frameActions};this.broadcast(packet);this.frameActions=[];this.frameStart=state.tick;}
-  message(m){const d=m.data;if(!d)return;if(d.protocol!==4){this.emit('error',{error:'房间游戏版本不同，请所有玩家刷新最新版并重新建房。'});return;}
+  result(a,r){if(!Number.isSafeInteger(a.requestId)||a.requestId<=0)return;const item={seat:a.seat,requestId:a.requestId,ok:r.ok};if(!r.ok)item.error=r.err;if(a.seat===this.mySeat)this.emit('actionResult',item);else this.frameResults.push(item);}
+  apply(state,a){const result=Sim.applyAction(state,a);if(result.ok){const {requestId,...command}=a;this.frameActions.push({tick:state.tick,a:command});}this.result(a,result);return result;}
+  afterTick(state){if(state.tick%3!==0&&!state.over)return;const packet={type:'frame',session:this.session,seq:++this.sequence,from:this.frameStart,to:state.tick,actions:this.frameActions};if(this.frameResults.length)packet.results=this.frameResults;this.broadcast(packet);this.frameActions=[];this.frameResults=[];this.frameStart=state.tick;}
+  message(m){const d=m.data;if(!d)return;if(d.protocol!==5){this.emit('error',{error:'房间游戏版本不同，请所有玩家刷新最新版并重新建房。'});return;}
     if(d.type==='lobby'&&m.from===this.hostId&&!this.playing){if(!d.state||!Array.isArray(d.state.players)||d.state.players.length>8)return;this.lobby=d.state;this.emit('lobby',d.state);}
     else if(d.type==='choice'&&this.host)this.choice(m.from,d);
     else if(d.type==='ready'&&this.host&&!this.playing){const p=this.lobby.players.find(p=>p?.clientId===m.from);if(p){p.ready=!p.ready;this.syncLobby();}}
     else if(d.type==='start'&&m.from===this.hostId&&!this.playing){if(!this.lobby||!Array.isArray(d.config?.players)||d.config.players.length!==this.lobby.size*2)return;this.session=d.config.session;this.playing=true;this.lastSeq=0;this.lastReceive=performance.now();this.emit('start',{config:d.config,seat:this.mySeat});}
     else if(d.type==='input'&&this.host&&d.session===this.session)this.enqueue(m.from,d.action);
-    else if(d.type==='frame'&&m.from===this.hostId&&!this.host&&d.session===this.session){if(d.seq!==this.lastSeq+1){this.emit('fatal',{error:'同步序列不连续，对局中止，本局不计排位。'});return;}this.lastSeq=d.seq;this.lastReceive=performance.now();this.emit('frame',d);}
+    else if(d.type==='frame'&&m.from===this.hostId&&!this.host&&d.session===this.session){if(d.seq!==this.lastSeq+1){this.emit('fatal',{error:'同步序列不连续，对局中止，本局不计排位。'});return;}this.lastSeq=d.seq;this.lastReceive=performance.now();this.emit('frame',d);for(const result of d.results||[])if(result.seat===this.mySeat)this.emit('actionResult',result);}
     else if(d.type==='reject'&&m.from===this.hostId)this.emit('error',{error:d.error});
   }
   maintain(){const now=performance.now();if(now-this.lastPing>20000&&this.client?.ws?.readyState===1){this.client.ping();this.lastPing=now;}if(this.playing&&!this.host&&now-this.lastReceive>12000){this.playing=false;this.emit('fatal',{error:'超过12秒未收到房主同步，对局中止，本局不计排位。'});}}

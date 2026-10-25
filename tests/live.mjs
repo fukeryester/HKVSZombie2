@@ -30,10 +30,15 @@ try{
   await pages[0].waitForFunction(()=>HKVZ2.app.state.players.every(p=>Econ.lanes(p,'worker').length===2),{},{timeout:35000});
   for(const p of pages)await p.evaluate(()=>{const a=HKVZ2.app,unit=Object.keys(CIVS[a.state.players[a.seat].civId].units)[0];for(let i=0;i<4;i++){HKVZ2.dispatch({op:'spawn',unit});HKVZ2.dispatch({op:'worker'});}});
   await pages[0].waitForFunction(()=>HKVZ2.app.state.players.every(p=>p.workers.length===13&&p.queue.length===0),{},{timeout:55000});
+  const removed=await pages[1].evaluate(()=>{const a=HKVZ2.app,p=a.state.players[a.seat],site=p.sites.find(s=>s.kind==='barracks');HKVZ2.dispatch({op:'demolish',siteId:site.id});return {id:site.id,slot:site.slot};});
+  await pages[0].waitForFunction(r=>!HKVZ2.app.state.players[1].sites.some(s=>s.id===r.id),removed);
+  await pages[1].evaluate(r=>HKVZ2.dispatch({op:'construct',kind:'barracks',slot:r.slot}),removed);
+  await pages[0].waitForFunction(r=>HKVZ2.app.state.players[1].sites.some(s=>s.kind==='barracks'&&s.slot===r.slot&&s.id!==r.id&&s.done),removed,{timeout:30000});
+  await pages[1].evaluate(()=>HKVZ2.dispatch({op:'worker',laneId:'worker:missing'}));await pages[1].waitForFunction(()=>document.getElementById('toast').textContent.includes('训练建筑尚未完工'));
   const tick=await pages[0].evaluate(()=>{const a=HKVZ2.app;a.paused=true;while(a.state.tick%3){a.network.beforeTick(a.state);Sim.tickSim(a.state,Sim.DT);a.network.afterTick(a.state);}return a.state.tick;});
   await pages[1].waitForFunction(t=>HKVZ2.app.state.tick===t,tick);
   const states=await Promise.all(pages.map(p=>p.evaluate(()=>JSON.stringify(HKVZ2.app.state))));assert.equal(states[0],states[1]);
   fs.mkdirSync('artifacts',{recursive:true});await pages[0].screenshot({path:'artifacts/live-multiplayer.png',fullPage:true});
   await pages[0].evaluate(()=>HKVZ2.app.network.close());await pages[1].waitForFunction(()=>HKVZ2.app.aborted);
-  assert.deepEqual(errors,[]);console.log(JSON.stringify({ok:true,projectId:deployment.projectId,cloudStats:true,liveRelaySessions:2,parallelArmyLanes:2,parallelWorkerLanes:2,identicalAtTick:tick,matchResultsSubmitted:0}));
+  assert.deepEqual(errors,[]);console.log(JSON.stringify({ok:true,projectId:deployment.projectId,cloudStats:true,liveRelaySessions:2,parallelArmyLanes:2,parallelWorkerLanes:2,identicalAtTick:tick,demolitionRebuild:true,guestErrorFeedback:true,matchResultsSubmitted:0}));
 }finally{await browser.close();}

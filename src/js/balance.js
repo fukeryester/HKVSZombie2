@@ -6,7 +6,7 @@
     hk_gang:{rush:true,killGold:10,training:.85},zom_robot:{controlImmune:true,repair:4},
     zom_necro:{regen:3,biomass:true},zom_asym:{quality:2,price:1.5,pop:2,gather:2,workerTime:20}
   };
-  const descriptions={hk_university:'科研协作：升本快20%、采集快12%。急救、反机械电磁与远程自动化构成防线。',hk_wild:'山城封建：有机兵食物便宜15%、近战兵减伤20%。长枪克制大型单位，投石专攻建筑。',hk_gang:'九龙堂口：前期突袭文明，训练快15%，每次击杀获得10黄金。燃瓶、火力封锁与侧翼伏兵。',zom_robot:'自治尸械：全军木金造价、免疫转化，脱战自修4生命/秒。阵亡回收废料，过载换取火力。',zom_necro:'重组尸巢：每秒再生3生命；收割尸体积累生质。骨刃流血、囊肿自爆与寄生孵化。',zom_asym:'异种融合：士兵和农民占2人口、造价1.5倍；士兵攻血和体型、农民采集均为标准型2倍。巨臂牵引、凝视与个体蜕变。'};
+  const descriptions={hk_university:'科研协作：升本快20%、采集快12%。急救、反机械电磁与远程自动化构成防线。',hk_wild:'山城封建：有机兵食物便宜15%、近战兵减伤20%。长枪克制大型单位，投石专攻建筑。',hk_gang:'九龙堂口：前期突袭文明，训练快15%，每次击杀获得10黄金。燃瓶、火力封锁与侧翼伏兵。',zom_robot:'自治尸械：全军木金造价、免疫转化，脱战自修4生命/秒。阵亡回收废料，过载换取火力。',zom_necro:'重组尸巢：每秒再生3生命；收割尸体积累生质。骨刃流血、囊肿自爆与寄生孵化。',zom_asym:'异种融合：士兵和农民占2人口、造价1.5倍；士兵攻血与农民采集为标准型2倍；体型随时代成长。巨臂牵引、凝视与个体蜕变。'};
   Object.values(CIVS).forEach(c=>{
     c.traits={...(traits[c.id]||{}),rush:rush.has(c.id)};
     c.desc=descriptions[c.id]||c.desc+' '+(rush.has(c.id)?'前期早战文明，适合持续施压。':'发育文明，优先扩张经济并解锁三、四本。');
@@ -21,9 +21,9 @@
       u.pop=c.traits.pop||1;u.costFactor=c.traits.price||1;u.foodDiscount=c.traits.foodDiscount||1;
       u.speed=Math.round(u.speed*(t===1?.65:t===2?.78:.88));
       if(c.traits.rush&&t<=2){u.dmg=Math.round(u.dmg*1.15);u.speed=Math.round(u.speed*1.12);}
-      u.buildTime=([0,6,10,20,30][t])*(c.traits.training||1);
+      u.buildTime=([0,6,10,16,23][t])*(c.traits.training||1);
       u.controlImmune=t>=3||!!c.traits.controlImmune;if(u.support==='convert'){u.atkCd=Math.max(7,u.atkCd);u.dur=Math.min(6,u.dur||6);u.desc+=' 仅可转化二本及以下有机兵；高阶和自治机械免疫。';}
-      u.art.scale=c.traits.quality||1;
+      u.art.scale=c.id==='zom_asym'?[0,1.05,1.2,1.65,2][t]:1;
       u.healAmt=u.support==='heal'?(t>=3?180:35):u.healAmt;
       if(t>=3&&u.onDeath==='explode')u.explodeDmg=Math.round(u.dmg*4);
       if(t>=3&&u.aura==='heal')u.auraAmt=35;
@@ -34,7 +34,7 @@
   tune('hk_university','engineer',{vsMachine:2},'反机械：对机械造成双倍伤害。');
   tune('hk_university','drone',{evasion:.7},'旋翼平台：承受近战伤害减少30%。');
   tune('hk_university','exo',{armor:.75},'外骨骼装甲：承伤降低25%。');
-  tune('hk_university','mortar',{siege:2.5},'电磁攻城：对基地与城堡伤害2.5倍。');
+  tune('hk_university','mortar',{siege:2.5},'电磁攻城：对基地伤害2.5倍。');
   tune('hk_wild','archer',{range:300},'长弓：远距狙击。');
   tune('hk_wild','pike',{vsLarge:3,range:65},'长枪：对巨型、重甲与融合怪物伤害3倍。');
   tune('hk_wild','knight',{armor:.65},'重甲盾卫：承伤降低35%。');
@@ -61,7 +61,7 @@
   tune('zom_asym','mirror',{support:'heal',healAmt:360,range:240},'双向共生：以反向躯体修复友军，替代雷同转化。');
   const kits={
     hk_university:[['开放科研','open_science',2,900,55,'当前升本剩余时间缩短30%；20秒采集效率 +35%。'],['战地医学院','field_hospital',3,1400,65,'20秒内，本方部队每秒恢复最大生命的2%。'],['电磁隔离网','emp_grid',4,2100,75,'敌机械瘫痪5秒；有机单位减速55%，持续10秒。']],
-    hk_wild:[['部族狩猎','tribal_hunt',2,850,60,'获得350食物、180木头。'],['铁壁盾阵','shield_wall',3,1350,60,'本方近战兵承伤降低60%，移速降低25%，持续18秒。'],['山城烽火','fortress_watch',4,2000,80,'修复本方城堡35%耐久，25秒内城堡射速与伤害均翻倍。']],
+    hk_wild:[['部族狩猎','tribal_hunt',2,850,60,'获得350食物、180木头。'],['铁壁盾阵','shield_wall',3,1350,60,'本方近战兵承伤降低60%，移速降低25%，持续18秒。'],['山城烽火','fortress_watch',4,2000,80,'基地回复15%耐久，25秒内防御槽射速与伤害均翻倍。']],
     hk_gang:[['黑市交易','black_market',2,800,50,'将150食物和150木头换成500黄金。资源不足无法发动。'],['交叉火网','crossfire',3,1400,65,'对最靠前的5名敌军各造成700伤害，并减速5秒。'],['堂口伏击','triad_ambush',2,1500,75,'在敌方阵前集结4名刀手和4名堂口枪手，制造侧翼压力。']],
     zom_robot:[['废料再利用','scrap_recycling',2,800,40,'消耗最多6份废料，每份换80木头、60黄金；无废料无法发动。'],['分布式重启','distributed_reboot',3,1400,65,'本方机械修复30%生命并获得25%减伤，持续16秒。'],['危险超频','overclock',4,2100,75,'14秒内本方机械攻速提升82%、移速提升20%，但承伤增加25%。']],
     zom_necro:[['血肉缝合','flesh_weave',2,800,45,'消耗3生质，修复最多3名本方伤兵各45%生命。'],['囊肿连爆','rupture_chain',3,1400,70,'引爆最多3名本方囊肿或低阶尸体兵；对周围敌军造成900伤害。'],['尸巢孵化','brood_incubation',4,2200,85,'消耗8生质，在前线孵出2名重组暴君，各占1人口。']],

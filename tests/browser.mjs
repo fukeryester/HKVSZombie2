@@ -4,7 +4,7 @@ import fs from 'node:fs';
 fs.mkdirSync('artifacts',{recursive:true});
 const browser=await chromium.launch({headless:true,channel:process.env.BROWSER_CHANNEL||'msedge',args:['--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']});
 const errors=[];const pages=[];
-async function page(viewport={width:1440,height:1050}){const context=await browser.newContext({viewport});const p=await context.newPage();await p.addInitScript(()=>{Object.defineProperty(crypto,'randomUUID',{value:undefined});});p.on('pageerror',e=>errors.push(e.message));pages.push(p);return p;}
+async function page(viewport={width:1440,height:1050}){const context=await browser.newContext({viewport});const p=await context.newPage();await p.addInitScript(()=>{Object.defineProperty(crypto,'randomUUID',{value:undefined});localStorage.setItem('hkvsz2.muted','1');});p.on('pageerror',e=>errors.push(e.stack||e.message));pages.push(p);return p;}
 async function advance(p,seconds){await p.evaluate(seconds=>{const {state}=HKVZ2.app;for(let i=0;i<seconds*30&&!state.over;i++)Sim.tickSim(state,Sim.DT);},seconds);await p.waitForTimeout(220);}
 try{
   const p=await page();await p.goto('http://127.0.0.1:4174');await p.screenshot({path:'artifacts/menu-desktop.png',fullPage:true});
@@ -18,7 +18,7 @@ try{
   await p.click('[data-worker]');await advance(p,14.1);assert.equal(await p.evaluate(()=>HKVZ2.app.state.players[0].workers.length),9);
   await p.click('[data-tab="build"]');await p.click('[data-build="house"]');await p.click('[data-slot="0"]');await advance(p,13);assert.equal(await p.evaluate(()=>HKVZ2.app.state.players[0].popCap),74);
   await p.evaluate(()=>{const p=HKVZ2.app.state.players[0];p.food=p.gold=2000;});await p.click('[data-age]');await advance(p,24);assert.equal(await p.locator('#research-hud').isVisible(),true);assert.ok(Number(await p.locator('#research-progress').getAttribute('aria-valuenow'))>=49);await p.screenshot({path:'artifacts/age-progress-ui.png',fullPage:true});await advance(p,25);assert.equal(await p.evaluate(()=>HKVZ2.app.state.players[0].age),2);assert.equal(await p.locator('#research-hud').isVisible(),false);assert.equal(await p.evaluate(()=>HKVZ2.app.state.players[0].baseHpMax),16000);
-  await p.evaluate(()=>HKVZ2.app.state.players[0].stone=500);await p.click('[data-build="castle"]');await p.click('[data-slot="4"]');await advance(p,31);assert.equal(await p.evaluate(()=>HKVZ2.app.state.players[0].sites.find(s=>s.kind==='castle').done),true);
+  await p.evaluate(()=>HKVZ2.app.state.players[0].stone=500);await p.click('[data-build="castle"]');await p.click('[data-slot="6"]');await advance(p,31);assert.equal(await p.evaluate(()=>HKVZ2.app.state.players[0].sites.find(s=>s.kind==='castle').done),true);
   await p.click('[data-tab="army"]');await p.click('[data-spawn="engineer"]');await advance(p,10.1);assert.ok(await p.evaluate(()=>HKVZ2.app.state.units.some(u=>u.unitId==='engineer')));await p.screenshot({path:'artifacts/battle-economy.png',fullPage:true});
   await p.click('[data-tab="build"]');await p.click('[data-build="barracks"]');await p.click('[data-slot="1"]');await p.click('[data-build="town_center"]');await p.click('[data-slot="2"]');await advance(p,27);
   assert.deepEqual(await p.evaluate(()=>[Econ.lanes(HKVZ2.app.state.players[0],'army').length,Econ.lanes(HKVZ2.app.state.players[0],'worker').length]),[2,2]);
@@ -68,13 +68,18 @@ try{
   await multiplayer[0].waitForFunction(()=>HKVZ2.app.state.players.every(p=>Econ.lanes(p,'army').length===2&&Econ.lanes(p,'worker').length===2),{},{timeout:45000});
   for(const p of multiplayer)await p.evaluate(()=>{const a=HKVZ2.app,unit=Object.keys(CIVS[a.state.players[a.seat].civId].units)[0];for(let i=0;i<4;i++){HKVZ2.dispatch({op:'spawn',unit,laneId:'auto'});HKVZ2.dispatch({op:'worker',laneId:'auto'});}});
   await multiplayer[0].waitForFunction(()=>HKVZ2.app.state.players.every(p=>p.workerQueue.length===4));
+  const removed=await multiplayer[6].evaluate(()=>{const a=HKVZ2.app,p=a.state.players[a.seat],site=p.sites.find(s=>s.kind==='barracks');a.network.action({op:'demolish',siteId:site.id,seat:0});HKVZ2.dispatch({op:'construct',kind:'mill',slot:site.slot});return {id:site.id,slot:site.slot};});
+  await multiplayer[0].waitForFunction(r=>{const p=HKVZ2.app.state.players[6];return !p.sites.some(s=>s.id===r.id)&&p.sites.some(s=>s.kind==='mill'&&s.slot===r.slot);},removed);
+  await multiplayer[6].evaluate(r=>HKVZ2.dispatch({op:'demolish',siteId:r.id}),removed);await multiplayer[6].waitForFunction(()=>document.getElementById('toast').textContent.includes('建筑不存在'));
+  await multiplayer[7].evaluate(()=>HKVZ2.dispatch({op:'worker',laneId:'worker:missing'}));await multiplayer[7].waitForFunction(()=>document.getElementById('toast').textContent.includes('训练建筑尚未完工'));
+  console.log('PASS: sender-bound demolition, same-slot replacement, cancelled lane refunds and guest rejection feedback');
   const cancelled=await multiplayer[7].evaluate(()=>{const a=HKVZ2.app,p=a.state.players[a.seat],army=p.queue.at(-1),worker=p.workerQueue.at(-1);HKVZ2.dispatch({op:'cancel_training',kind:'army',orderId:army.id});HKVZ2.dispatch({op:'cancel_training',kind:'worker',orderId:worker.id});return {army:army.id,worker:worker.id};});
   await multiplayer[0].waitForFunction(c=>{const p=HKVZ2.app.state.players[7];return !p.queue.some(q=>q.id===c.army)&&!p.workerQueue.some(q=>q.id===c.worker);},cancelled);
   await multiplayer[0].waitForFunction(()=>HKVZ2.app.state.players.every((p,i)=>p.workers.length===(i===7?12:13)&&p.queue.length===0&&p.workerQueue.length===0),{},{timeout:55000});
   assert.ok(await multiplayer[0].evaluate(()=>HKVZ2.app.state.units.every(u=>{const y=Renderer.point(u.x,u.y,u.row).y;return y>=460&&y<=558;})));
   console.log('PASS: 8 peers construct both facilities, train in parallel, remotely cancel orders and remain grounded');
   const skillOrders=[];for(const peer of multiplayer){skillOrders.push(await peer.evaluate(()=>{const a=HKVZ2.app,p=a.state.players[a.seat],index=p.civId==='zom_necro'?2:p.civId==='zom_robot'?1:0;const skill=CIVS[p.civId].skills[index];HKVZ2.dispatch({op:'skill',skill});return {seat:a.seat,skill};}));}
-  await multiplayer[0].waitForFunction(list=>list.every(({seat,skill})=>HKVZ2.app.state.players[seat].cd['skill_'+skill]>0),skillOrders);console.log('PASS: all eight peers activate faction abilities through protocol 4');
+  await multiplayer[0].waitForFunction(list=>list.every(({seat,skill})=>HKVZ2.app.state.players[seat].cd['skill_'+skill]>0),skillOrders);console.log('PASS: all eight peers activate faction abilities through protocol 5');
   const host=multiplayer[0];const target=await host.evaluate(()=>{const {app}=HKVZ2;app.paused=true;while(app.state.tick%3){app.network.beforeTick(app.state);Sim.tickSim(app.state,Sim.DT);app.network.afterTick(app.state);}return app.state.tick;});
   await Promise.all(multiplayer.slice(1).map(p=>p.waitForFunction(t=>HKVZ2.app.state.tick===t,target)));
   const states=await Promise.all(multiplayer.map(p=>p.evaluate(()=>JSON.stringify(HKVZ2.app.state))));states.slice(1).forEach(s=>assert.equal(s,states[0],'all 8 simulations must match exactly'));

@@ -3,7 +3,7 @@ window.AI={think(state,p,send){
   const civ=CIVS[p.civId],t=state.time;const jobCounts=Object.fromEntries([...Econ.TYPES,'idle','build'].map(j=>[j,p.workers.filter(w=>w.job===j).length]));
   const go=a=>send({seat:p.seat,...a});
   const needHouse=p.pop>=p.popCap-4&&!p.sites.some(s=>s.kind==='house'&&!s.done);
-  const free=p.sites.length<6;
+  const free=p.sites.filter(s=>s.slot<6).length<6;
   if(needHouse&&free&&Econ.can(p,Econ.buildCost(p,'house'))){const slot=[0,1,2,3,4,5].find(n=>!p.sites.some(s=>s.slot===n));if(go({op:'construct',kind:'house',slot}).ok)return;}
   const orphan=p.sites.find(s=>!s.done&&!p.workers.some(w=>w.job==='build'&&w.site===s.id));if(orphan){go({op:'resume',siteId:orphan.id});return;}
   const workersGoal=t<50?10:Econ.lanes(p,'worker').length>1?22:16;
@@ -15,7 +15,7 @@ window.AI={think(state,p,send){
   let priority=Econ.TYPES.filter(j=>p[j]<(needs[j]||0)&&jobCounts[j]<(desired[j]||1)).sort((a,b)=>(p[a]/(needs[a]||1))-(p[b]/(needs[b]||1)))[0];
   if(priority){const w=p.workers.find(w=>w.job==='idle')||p.workers.find(w=>w.job!=='build'&&w.job!==priority&&jobCounts[w.job]>(w.job==='food'?2:1));if(w){go({op:'assign',workerId:w.id,job:priority});return;}}
   if(wantsAge&&Econ.can(p,Econ.AGES[p.age])){go({op:'age'});return;}
-  if(p.age>=2&&t>55&&!p.sites.some(s=>s.kind==='castle')&&p.stone>=250){const slot=[4,5].find(n=>!p.sites.some(s=>s.slot===n));if(slot!=null){go({op:'construct',kind:'castle',slot});return;}}
+  if(p.age>=2&&t>55){const slot=[6,7].find(n=>!p.sites.some(s=>s.slot===n));const kind=p.age>=3&&!p.sites.some(s=>s.kind==='bombard')?'bombard':'castle';if(slot!=null&&Econ.can(p,Econ.buildCost(p,kind))){go({op:'construct',kind,slot});return;}}
   for(const id of civ.skills){const s=SKILLS[id];if(p.energy>=s.cost&&Sim.skillCdRemain(p,s,t)===0&&t>30){if(go({op:'skill',skill:id}).ok)return;}}
   const armyLanes=Econ.lanes(p,'army').length,workerLanes=Econ.lanes(p,'worker').length;
   if(t>40&&free&&!wantsAge){
