@@ -156,7 +156,7 @@ function damageBase(state, base, amount, attackerTeam, tier=4) {
 // Every conversion path shares this age and machine immunity rule.
 function canConvert(u){return u.hp>0&&u.def.tier<=2&&!u.def.controlImmune&&!u.charmedBy;}
 function damageUnit(state,target,amount,attacker,pure=false){
-  if(target.hp<=0)return;
+  if(target.hp<=0||target.def.isBase&&attacker?.def.noBaseAttack)return;
   const owner=state.players[target.seat],tr=CIVS[target.civId].traits;
   if(attacker&&!War.targetable(attacker,target))return;
   if(!pure){

@@ -16,13 +16,13 @@ window.WarArt=(()=>{
     for(const x of [-55,15,60]){R(c,x,73,14,12,steel);R(c,x+4,83,6,8,gold);}text(c,'HK • AERIAL COMMAND',0,-8,10,ink);c.restore();
   }
   function train(c,u,t){const y=Renderer.groundY(u.row),parts=War.trainParts(u);const left=440,right=1360;for(let x=left;x<right;x+=25)R(c,x,y+5,4,13,'#60747a');L(c,left,y+7,right,y+7,'#a8b8af',2);L(c,left,y+14,right,y+14,'#829994',2);for(const [i,part]of parts.entries()){c.save();c.translate(part.x,y);glow(c,0,-25,65,'#6acbcd1e');R(c,-39,-65,78,53,ink);R(c,-35,-60,70,40,'#486270');P(c,[[-35,-60],[-22,-76],[24,-76],[35,-60]],'#8fa7a5');R(c,-34,-37,68,7,gold);R(c,-31,-58,22,14,'#182f40');R(c,-28,-55,16,8,cyan);R(c,-4,-57,32,15,'#6d858d');for(let n=0;n<4;n++)R(c,0+n*7,-54,4,8,'#a8b7a5');
-      R(c,-43,-19,86,10,'#152d3c');for(const x of [-25,22]){ellipse(c,x,-7,11,11,ink);ring(c,x,-7,7,steel,3);L(c,x-5,-7-Math.sin(t*19)*5,x+5,-7+Math.sin(t*19)*5,edge,2);}L(c,-24,-10,23,-10,steel,3);
+      R(c,-43,-19,86,10,'#152d3c');for(const x of [-25,22]){ellipse(c,x,-7,11,11,ink);ring(c,x,-7,7,steel,3);L(c,x-5,-7-Math.sin(t*7)*5,x+5,-7+Math.sin(t*7)*5,edge,2);}L(c,-24,-10,23,-10,steel,3);
       R(c,-16,-84,34,14,ink);R(c,-12,-81,26,10,'#9aaea9');L(c,5,-79,35*u.dir,-81,ink,12);for(let j=-1;j<=1;j++)L(c,8,-79+j*3,36*u.dir,-81+j*3,steel,2);
       if(t-(u.parts.find(p=>p.id===part.id).lastShot??-999)<.1){P(c,[[u.dir*34,-87],[u.dir*61,-91],[u.dir*52,-79],[u.dir*62,-72],[u.dir*34,-74]],gold);glow(c,u.dir*47,-80,35,'#ffd18a7a');}
       R(c,-31,-101,62,5,ink);R(c,-30,-100,60*part.hp/part.maxHp,3,cyan);text(c,String(part.id+1).padStart(2,'0'),12,-44,10,gold);if(i<parts.length-1)L(c,37,-21,47,-21,steel,5);c.restore();}
     if(parts.length){const end=parts[u.dir>0?parts.length-1:0];c.save();c.translate(end.x, y);P(c,[[u.dir*30,-47],[u.dir*58,-20],[u.dir*40,-11],[u.dir*28,-19]],'#9cae9e');R(c,u.dir*30-5,-54,13,10,gold);glow(c,u.dir*41,-48,40,'#eaca7955');c.restore();}
   }
-  function mech(c,u,t){const walk=u.moving?Math.sin(t*5):0;c.save();c.translate(u.x,Renderer.groundY(u.row));c.scale(u.dir,1);glow(c,0,-150,170,'#70d8e528');
+  function mech(c,u,t){const walk=u.moving?Math.sin(t*2.5):0;c.save();c.translate(u.x,Renderer.groundY(u.row));c.scale(u.dir,1);glow(c,0,-150,170,'#70d8e528');
     joint(c,-30,-100,-53-walk*12,-52,23,'#547785');joint(c,-53-walk*12,-52,-63-walk*16,-8,20,'#9eafaa');joint(c,30,-100,52+walk*12,-48,23,'#547785');joint(c,52+walk*12,-48,65+walk*16,-8,20,'#9eafaa');R(c,-88-walk*16,-13,48,15,ink);R(c,43+walk*16,-13,49,15,ink);R(c,-84-walk*16,-13,40,5,gold);R(c,47+walk*16,-13,40,5,gold);
     P(c,[[-67,-219],[54,-226],[70,-134],[34,-98],[-48,-106],[-77,-162]],ink);P(c,[[-59,-212],[47,-218],[60,-140],[27,-112],[-42,-116],[-65,-163]],'#547d88');R(c,-37,-205,70,49,'#172d42');R(c,-25,-197,47,15,cyan);R(c,-18,-151,37,27,ink);glow(c,0,-137,55,'#78efe0aa');ellipse(c,0,-137,13,13,cyan);ring(c,0,-137,20,edge,3);
     R(c,-47,-255,91,37,ink);R(c,-40,-249,77,25,steel);R(c,-28,-241,53,8,cyan);R(c,-7,-270,11,18,gold);for(let i=0;i<4;i++){R(c,-61+i*37,-221,20,35,'#a6b8aa');R(c,-57+i*37,-216,12,19,'#253d50');}
@@ -34,7 +34,7 @@ window.WarArt=(()=>{
     for(const d of [-1,1]){P(c,[[d*83,-3],[d*119,-15],[d*111,-174],[d*88,-247],[d*68,-212],[d*78,-148]],'#756b88');for(let j=0;j<7;j++){R(c,d*91-9,-28-j*25,19,9,'#b6a2bb');R(c,d*88-5,-21-j*25,10,6,'#312b44');}P(c,[[d*90,-217],[d*122,-264],[d*95,-251],[d*80,-219]],bone);}
     R(c,-118,-9,237,16,'#414153');for(let i=0;i<6;i++)P(c,[[-113+i*40,0],[-133+i*44,17],[-102+i*40,10]],'#95839e');text(c,'噩 梦 之 门',0,-119,16,'#e6b2f4');c.restore();
   }
-  function king(c,u,t){const w=u.moving?Math.sin(t*2)*7:0;const organic=(c,x,y,xx,yy,width,col)=>{L(c,x,y,xx,yy,'#41323b',width+9);L(c,x,y,xx,yy,col,width);ellipse(c,x,y,width*.85,width*.85,'#a6a087');ellipse(c,x-2,y-2,width*.45,width*.45,'#774e58');L(c,x+2,y+3,xx+2,yy-2,bone,3);};c.save();c.translate(u.x,Renderer.groundY(u.row));c.scale(u.dir,1);glow(c,0,-150,190,'#b5c76c33');P(c,[[-72,-231],[-119,-57],[-86,-7],[71,-10],[93,-142],[56,-233]],'#45394c');
+  function king(c,u,t){const w=u.moving?Math.sin(t*1.2)*7:0;const organic=(c,x,y,xx,yy,width,col)=>{L(c,x,y,xx,yy,'#41323b',width+9);L(c,x,y,xx,yy,col,width);ellipse(c,x,y,width*.85,width*.85,'#a6a087');ellipse(c,x-2,y-2,width*.45,width*.45,'#774e58');L(c,x+2,y+3,xx+2,yy-2,bone,3);};c.save();c.translate(u.x,Renderer.groundY(u.row));c.scale(u.dir,1);glow(c,0,-150,190,'#b5c76c33');P(c,[[-72,-231],[-119,-57],[-86,-7],[71,-10],[93,-142],[56,-233]],'#45394c');
     organic(c,-33,-97,-47-w,-47,24,'#858b70');organic(c,-47-w,-47,-52-w,-9,23,'#a19d80');organic(c,36,-99,54+w,-43,24,'#858b70');organic(c,54+w,-43,63+w,-8,23,'#b0a78c');R(c,-80-w,-12,51,15,'#606957');R(c,41+w,-12,53,15,'#606957');
     ellipse(c,0,-165,78,77,'#717e64');ellipse(c,13,-151,65,65,'#a7a482');P(c,[[-38,-223],[-44,-116],[13,-90],[27,-224]],'#754b5b');for(let i=0;i<10;i++){L(c,-9,-214+i*11,-53,-200+i*11,bone,4);L(c,-6,-215+i*11,39,-210+i*11,bone,4);}L(c,-8,-222,-6,-100,bone,6);
     organic(c,-65,-203,-106,-153,25,'#9a9a75');organic(c,-106,-153,-109,-91,24,'#7e8b70');for(let j=0;j<4;j++)L(c,-124+j*10,-91,-132+j*12,-54,bone,5);
@@ -48,7 +48,7 @@ window.WarArt=(()=>{
     for(let i=0;i<7;i++){const x=-103+i*34;P(c,[[x-9,-247],[x-14,-285-(i%2)*22],[x+16,-246]],bone);}for(let i=0;i<u.lives;i++){ellipse(c,-35+i*35,-78,12,14,'#f2c1a0');ellipse(c,-33+i*35,-79,4,8,'#7b2f4c');}c.restore();
   }
   function draw(c,s){for(const u of s.units){if(!u.beast||u.hp<=0)continue;const y=Renderer.groundY(u.row);ellipse(c,u.x,y+3,u.beast==='train'?War.trainParts(u).length*38:90,9,'#06121b77');({zeppelin:ship,train,mech,portal,king,cyst}[u.beast])(c,u,s.time);
-      const height={zeppelin:305,train:118,mech:290,portal:287,king:350,cyst:330}[u.beast],width=u.beast==='train'?240:190;const yy=y-height;R(c,u.x-width/2-2,yy-19,width+4,9,ink);R(c,u.x-width/2,yy-17,width*Math.max(0,u.hp/u.hpMax),5,u.team==='hk'?cyan:'#e195ab');text(c,u.def.name+(u.beast==='cyst'?' · '+u.lives+'条生命':u.beast==='train'?' · '+War.trainParts(u).length+'节车厢':''),u.x,yy-29,14,u.team==='hk'?'#c6fff0':'#ffcbdb');text(c,Math.ceil(u.hp)+' / '+u.hpMax,u.x,yy+5,10,edge);
+      const height={zeppelin:305,train:118,mech:290,portal:287,king:350,cyst:330}[u.beast],width=u.beast==='train'?240:190;const yy=y-height;R(c,u.x-width/2-2,yy-19,width+4,9,ink);R(c,u.x-width/2,yy-17,width*Math.max(0,u.hp/u.hpMax),5,u.team==='hk'?cyan:'#e195ab');text(c,u.def.name+(u.beast==='cyst'?' · '+u.lives+'条生命':u.beast==='train'?' · '+War.trainParts(u).length+'节车厢':''),u.x,yy-29,14,u.team==='hk'?'#c6fff0':'#ffcbdb');text(c,Math.ceil(u.hp)+' / '+u.hpMax,u.x,yy+5,10,edge);if(u.speed>0)text(c,s.time<u.turnUntil?'制动掉头':u.patrolDir===(u.team==='hk'?1:-1)?'巡航 · 前往敌方阵前':'巡航 · 返回己方阵前',u.x,yy+20,10,gold);
     }}
   function shake(s){let n=0;for(const e of s.effects)if(['base_burst','war_bloodmoon','war_death','war_arrival'].includes(e.kind)){const elapsed=e.initLife-e.life;if(elapsed<.7)n=Math.max(n,(1-elapsed/.7)*(e.kind==='war_bloodmoon'?13:8));}return {x:Math.sin(s.time*68)*n,y:Math.cos(s.time*81)*n*.6};}
   function fx(c,s){const t=s.time;
@@ -80,6 +80,6 @@ window.WarArt=(()=>{
       c.restore();
     }
   }
-  function preview(canvas,kind){canvas.width=520;canvas.height=380;const c=canvas.getContext('2d');c.imageSmoothingEnabled=false;c.fillStyle=War.DEFS[kind].team==='hk'?'#142d3a':'#2c2038';c.fillRect(0,0,520,380);c.save();c.translate(0,-104);const u={x:260,row:0,dir:1,def:War.DEFS[kind],beast:kind,hp:War.DEFS[kind].hp,hpMax:War.DEFS[kind].hp,lives:3,atkFxTime:-999,parts:Array.from({length:5},(_,id)=>({id,hp:16000,maxHp:16000,lastShot:-999}))};({zeppelin:ship,train,mech,portal,king,cyst}[kind])(c,u,1);c.restore();}
+  function preview(canvas,kind){canvas.width=520;canvas.height=380;const c=canvas.getContext('2d');c.imageSmoothingEnabled=false;c.fillStyle=War.DEFS[kind].team==='hk'?'#142d3a':'#2c2038';c.fillRect(0,0,520,380);c.save();c.translate(0,-104);const u={x:260,row:0,dir:1,def:War.DEFS[kind],beast:kind,hp:War.DEFS[kind].hp,hpMax:War.DEFS[kind].hp,lives:3,atkFxTime:-999,parts:Array.from({length:5},(_,id)=>({id,hp:War.DEFS.train.hp/5,maxHp:War.DEFS.train.hp/5,lastShot:-999}))};({zeppelin:ship,train,mech,portal,king,cyst}[kind])(c,u,1);c.restore();}
   return {draw,fx,shake,preview};
 })();
