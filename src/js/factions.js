@@ -29,7 +29,7 @@ window.Factions=(()=>{
       case 'fortress_watch':p.watchUntil=until(25);p.baseHp=Math.min(p.baseHpMax,p.baseHp+p.baseHpMax*.15);break;
       case 'black_market':p.food-=150;p.wood-=150;p.spent+=300;p.gold+=500;p.earned+=500;break;
       case 'crossfire':for(const u of enemies.slice(0,5)){Sim.damageUnit(s,u,700,null,true);u.slowUntil=until(5);u.slowMul=.5;mark(s,u,'fire_burst');}break;
-      case 'triad_ambush':{const b=s.players.filter(x=>x.team!==p.team&&x.baseHp>0).sort((a,b)=>Math.abs(a.baseX-p.baseX)-Math.abs(b.baseX-p.baseX))[0];if(b)for(let i=0;i<8;i++)spawn(s,p,i<4?'blade':'pistol',{free:true,x:b.baseX+(p.team==='hk'?-1:1)*(260+i*9)});break;}
+      case 'triad_ambush':{const b=War.baseTargets(s,p.team==='hk'?'zom':'hk').sort((a,b)=>Math.abs(a.baseX-p.baseX)-Math.abs(b.baseX-p.baseX))[0];if(b)for(let i=0;i<8;i++)spawn(s,p,i<4?'blade':'pistol',{free:true,x:b.baseX+(p.team==='hk'?-1:1)*(260+i*9)});break;}
       case 'scrap_recycling':{const n=Math.min(6,p.scrap);p.scrap-=n;p.wood+=80*n;p.gold+=60*n;p.earned+=140*n;break;}
       case 'distributed_reboot':p.rebootUntil=until(16);for(const u of units)if(u.def.machine){u.hp=Math.min(u.hpMax,u.hp+u.hpMax*.3);mark(s,u,'heal');}break;
       case 'overclock':p.overclockUntil=until(14);break;

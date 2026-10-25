@@ -1,5 +1,12 @@
 window.AI={think(state,p,send){
   if(p.resigned||state.over||state.time-p.last_ai_think<1.1)return;p.last_ai_think=state.time;
+  // Only the first remaining AI seat chooses; the authoritative action owns the shared lock.
+  // Pick without consuming simulation RNG: network guests replay the action, not AI thinking.
+  if(War.canSummon(state,p)&&War.teamIsAI(state,p.team)&&!state.players.some(q=>q.team===p.team&&!q.resigned&&q.seat<p.seat)){
+    const kinds=Object.keys(War.DEFS).filter(k=>War.DEFS[k].team===p.team);
+    const kind=kinds[((state.seed+p.seat*17)>>>0)%kinds.length];
+    if(send({seat:p.seat,op:'summon_beast',kind}).ok)return;
+  }
   if(p.baseRuined){if(p.workers.filter(w=>w.job==='repair'&&w.repairSeat===p.seat).length<4)send({seat:p.seat,op:'repair_base',targetSeat:p.seat,count:4});return;}
   const civ=CIVS[p.civId],t=state.time;const jobCounts=Object.fromEntries([...Econ.TYPES,'idle','build'].map(j=>[j,p.workers.filter(w=>w.job===j).length]));
   const go=a=>send({seat:p.seat,...a});

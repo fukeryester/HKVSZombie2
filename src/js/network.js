@@ -29,7 +29,7 @@ window.BattleNet=class BattleNet{
   flush(){
     const item=this.outbox?.shift();
     if(!item||!this.client||this.client.ws?.readyState!==1){this.outTimer=null;return;}
-    const packet={protocol:6,...item.data};
+    const packet={protocol:7,...item.data};
     if(item.to)this.client.send(item.to,packet);else this.client.broadcast(packet);
     this.outTimer=setTimeout(()=>{this.outTimer=null;this.flush();},75);
   }
@@ -45,7 +45,7 @@ window.BattleNet=class BattleNet{
   result(a,r){if(!Number.isSafeInteger(a.requestId)||a.requestId<=0)return;const item={seat:a.seat,requestId:a.requestId,ok:r.ok};if(!r.ok)item.error=r.err;if(a.seat===this.mySeat)this.emit('actionResult',item);else this.frameResults.push(item);}
   apply(state,a){const result=Sim.applyAction(state,a);if(result.ok){const {requestId,...command}=a;this.frameActions.push({tick:state.tick,a:command});}this.result(a,result);return result;}
   afterTick(state){if(state.tick%3!==0&&!state.over)return;const packet={type:'frame',session:this.session,seq:++this.sequence,from:this.frameStart,to:state.tick,actions:this.frameActions};if(this.frameResults.length)packet.results=this.frameResults;this.broadcast(packet);this.frameActions=[];this.frameResults=[];this.frameStart=state.tick;}
-  message(m){const d=m.data;if(!d)return;if(d.protocol!==6){this.emit('error',{error:'房间游戏版本不同，请所有玩家刷新最新版并重新建房。'});return;}
+  message(m){const d=m.data;if(!d)return;if(d.protocol!==7){this.emit('error',{error:'房间游戏版本不同，请所有玩家刷新最新版并重新建房。'});return;}
     if(d.type==='lobby'&&m.from===this.hostId&&!this.playing){if(!d.state||!Array.isArray(d.state.players)||d.state.players.length>8)return;this.lobby=d.state;this.emit('lobby',d.state);}
     else if(d.type==='choice'&&this.host)this.choice(m.from,d);
     else if(d.type==='ready'&&this.host&&!this.playing){const p=this.lobby.players.find(p=>p?.clientId===m.from);if(p){p.ready=!p.ready;this.syncLobby();}}

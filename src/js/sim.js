@@ -107,7 +107,7 @@ function createInitialState(config) {
 
 // ---- 多基地辅助 ----
 function teamAlive(state, team) {
-  return state.players.some(p => p.team === team && !p.resigned && p.baseHp > 0)||War.portalAlive(state,team);
+  return state.players.some(p => p.team === team && !p.resigned && !p.baseRuined && p.baseHp > 0)||War.portalAlive(state,team);
 }
 function nearestBase(state, team, x) {
   let best = null, bd = Infinity;
@@ -133,7 +133,7 @@ function teamHpSum(state, team) {
 const BASE_HIT_ENERGY = 3;
 function damageBase(state, base, amount, attackerTeam, tier=4) {
   amount*=[0,.18,.35,.85,1][tier]||1;
-  if (!base || base.baseHp <= 0) return;
+  if (!base || base.baseHp <= 0 || base.baseRuined) return;
   if(base.warUnitId){const u=state.units.find(u=>u.id===base.warUnitId);if(u)damageUnit(state,u,amount,null);return;}
   const shielded = (base.baseShieldUntil || 0) > state.time;
   const reduction = shielded ? (base.baseShieldReduction || 0) : 0;
@@ -576,7 +576,7 @@ function tickSim(state, dt) {
     p.energy = Math.min(9999, (p.energy || 0) + 6 * dt);
 
     // Base regeneration resumes twelve seconds after taking damage.
-    if (p.baseRegen > 0 && p.baseHp > 0 && p.baseHp < p.baseHpMax
+    if (!p.baseRuined && p.baseRegen > 0 && p.baseHp > 0 && p.baseHp < p.baseHpMax
         && state.time - (p.lastHitTime ?? -999) > 12.0) {
       p.baseHp = Math.min(p.baseHpMax, p.baseHp + p.baseRegen * dt);
     }

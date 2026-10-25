@@ -42,7 +42,7 @@ window.Renderer=(()=>{
     return canvas;
   }
   function base(c,p,time){const x=p.baseX,y=groundY(p.row);const civ=CIVS[p.civId],z=civ.side==='zom',dead=p.baseHp<=0;
-    if(p.baseRuined){c.save();c.translate(x,y);for(let i=0;i<9;i++){rect(c,-47+i*11,-6-(i%3)*5,14,10,'#4e5559');rect(c,-43+i*10,-11-(i%2)*7,9,7,'#79756e');}line(c,-40,-4,43,-4,'#a07769',3);if(p.baseHp>0){for(const dx of [-31,30]){line(c,dx,0,dx,-60,'#aa997a',3);line(c,dx,-59,-dx,-38,'#aa997a',2);}rect(c,-30,-35,60,5,'#223b43');rect(c,-30,-35,60*p.baseHp/(p.baseHpMax*.2),4,'#d8bf87');}rect(c,-7,-27,14,13,'#a35d61');text(c,'可维修',-16,-39,'#efb6a1',10);c.restore();return;}
+    if(p.baseRuined){c.save();c.translate(x,y);for(let i=0;i<9;i++){rect(c,-47+i*11,-6-(i%3)*5,14,10,'#4e5559');rect(c,-43+i*10,-11-(i%2)*7,9,7,'#79756e');}line(c,-40,-4,43,-4,'#a07769',3);if(p.baseHp>0){for(const dx of [-31,30]){line(c,dx,0,dx,-60,'#aa997a',3);line(c,dx,-59,-dx,-38,'#aa997a',2);}rect(c,-30,-35,60,5,'#223b43');rect(c,-30,-35,60*Math.min(1,p.baseHp/p.baseHpMax),4,'#d8bf87');}rect(c,-7,-27,14,13,'#a35d61');text(c,p.baseHp>0?'重建 '+Math.floor(p.baseHp/p.baseHpMax*100)+'% · 保护中':'可维修',p.baseHp>0?-48:-16,-68,'#efb6a1',10);c.restore();return;}
     c.save();c.translate(x,y);const hit=Math.max(0,time-(p.lastHitTime??-999)),jelly=time-(p.jellyStartedAt??-999)<.65?Math.sin((time-p.jellyStartedAt)*24)*Math.exp(-(time-p.jellyStartedAt)*5)*.1:0;c.scale(1+jelly,1-jelly);if(dead)c.globalAlpha=.45;
     if(hit<2){c.strokeStyle='#f28c7a';c.lineWidth=3;c.strokeRect(-57,-162,114,168);}
 
