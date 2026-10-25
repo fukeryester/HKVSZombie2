@@ -10,12 +10,7 @@
       units[key] = U(label,costs[tier-1],tank?3:(tier>2?3:1),tank?[180,220,300,520][tier-1]:[55,80,145,280][tier-1],[11,23,32,50][tier-1],arch==='zom_cata'?360:ranged?210:28,tank?32:52,ranged?1.35:0.95,1.5+tier*.6,[null,B.TECH_A,B.TECH_B,B.TECH_C][tier-1],arch,{desc:extra.desc || `${name}的${label}。${ranged?'远程支援':'前线作战'}单位。`,...extra});
     });
     CIVS[id]={id,side,name,color,accent,desc,theme,bonus,baseIncome:5.5,baseCap:24,baseRegen:3,buildings:JSON.parse(JSON.stringify(source.buildings)),units,skills:[]};
-    const skills = [
-      {name:side==='hk'?'战术动员':'群体觉醒',kind:'buff_army',moveMul:1.25,atkMul:1.35,dur:14,cost:1050,cd:40,desc:'全军伤害 +35%、移速 +25%，持续14秒。'},
-      {name:side==='hk'?'紧急补给':'组织再生',kind:'army_heal',heal:.45,cost:1650,cd:48,desc:'全军立即恢复45%最大生命。'},
-      {name:side==='hk'?'精锐增援':'终末降临',kind:'elite_drop',units:[[roster[6][0],1],[roster[3][0],2]],cost:2350,cd:60,desc:'召唤1名终阶兵与2名三阶兵，不占人口。'}
-    ];
-    skills.forEach((s,i)=> {const key=id+'_skill_'+i;SKILLS[key]={...s,id:key,side};CIVS[id].skills.push(key);});
+    CIVS[id].skills=Array.from({length:3},(_,i)=>id+'_skill_'+i);
   };
   add('hk_university','hk','香港大学城','#46bab9','#a2f4dd','科研、急救与自动化防线。采集效率 +12%。',[
     ['student','校园守卫',1,'melee_cheap'],['medic','急救研究员',2,'support',{support:'heal',healAmt:30}],['engineer','工程系射手',2,'ranged_light'],['drone','巡防无人机',3,'ranged_heavy',{machine:true}],['exo','外骨骼教授',3,'melee_tank',{machine:true}],['mortar','电磁迫击炮',3,'zom_cata',{lobber:true,machine:true}],['sentinel','城大守望机甲',4,'ranged_heavy',{splash:36,machine:true}]
@@ -40,17 +35,14 @@
   Object.values(CIVS).forEach((c,index)=>{
     c.theme ||= themes[index];
     c.baseCap = 24 + (c.id==='hk_slum'||c.id==='zom_ghost'?8:0);
-    c.buildings[B.POP].effect.pop=8;
+    c.buildings[B.POP].effect.pop=50;
     c.buildings[B.POP].cap=12;
     c.buildings.castle={name:'防御城堡',cost:250,cap:2,hp:1300,effect:{}};
     Object.entries(c.units).forEach(([id,u],i)=>{
       u.tier = !u.prereq?1:u.prereq===B.TECH_A?2:u.prereq===B.TECH_B?3:4;
-      // Rebalance legacy age multipliers while keeping each unit's role and abilities.
-      if(u.eraPower){u.hp=Math.round(u.hp*(u.tier===3?.40:.40));u.dmg=Math.round(u.dmg*(u.tier===3?.72:.68));}
       u.machine ||= !!u.lobber || /truck|rickshaw|van|drone|exo|mortar|sentinel|trebuchet/.test(id);
       u.art={theme:c.theme,index:i,variant:index,tier:u.tier,arch:u.arch,machine:!!u.machine};
-      if(c.bonus==='giant'&&u.arch==='zom_giant')u.hp=Math.round(u.hp*1.12);
-      u.buildTime=(1.1+Math.sqrt(u.cost)/13)*(c.bonus==='training'?.85:1);
+      // Economy and combat profiles are applied once by balance.js.
     });
   });
   window.HK_CIVS=Object.keys(CIVS).filter(id=>CIVS[id].side==='hk');

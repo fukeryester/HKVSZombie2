@@ -7,6 +7,7 @@ window.Pixel=(()=>{
   function poly(c,pts,color){c.fillStyle=color;c.beginPath();pts.forEach(([x,y],i)=>i?c.lineTo(x,y):c.moveTo(x,y));c.closePath();c.fill();}
   function sprite(civId,unitId,state='idle',frame=0){
     const key=[civId,unitId,state,frame].join('/');if(cache.has(key))return cache.get(key);
+    const bespoke=FactionArt.sprite(civId,unitId,state,frame);if(bespoke){const pixels=bespoke.getContext('2d').getImageData(0,0,bespoke.width,bespoke.height).data;let top=bespoke.height;for(let yy=0;yy<bespoke.height;yy++)for(let xx=0;xx<bespoke.width;xx++)if(pixels[(yy*bespoke.width+xx)*4+3])top=Math.min(top,yy);bespoke.artHeight=bespoke.anchorY-top;cache.set(key,bespoke);return bespoke;}
     const civ=CIVS[civId],isWorker=unitId.startsWith('__worker');
     const u=isWorker?{arch:'worker',range:20,tier:1,art:{theme:civ.theme,index:0,variant:0,tier:1,arch:'worker',machine:false}}:civ.units[unitId],a=u.art;
     const canvas=document.createElement('canvas');canvas.width=112;canvas.height=96;const c=canvas.getContext('2d');c.imageSmoothingEnabled=false;
@@ -112,7 +113,7 @@ window.Pixel=(()=>{
     if(a.tier===4){if(zombie){rect(c,-6,headY-3,4,2,accent);rect(c,1,headY-6,3,3,accent);line(c,-6,headY, -12,headY-9,hi,2);}else{rect(c,-5,headY-5,3,4,p.gold);rect(c,1,headY-7,3,6,p.gold);rect(c,6,headY-5,3,4,p.gold);}}
     c.setTransform(1,0,0,1,0,0);cache.set(key,canvas);return canvas;
   }
-  function draw(c,civId,unitId,x,y,size=80,state='idle',frame=0,dir=1,alpha=1){c.save();c.globalAlpha=alpha;c.translate(Math.round(x),Math.round(y));c.scale(dir,1);c.drawImage(sprite(civId,unitId,state,frame),-size*.7,-size*.98,size*1.4,size*1.2);c.restore();}
-  function portrait(canvas,civId,unitId){canvas.width=96;canvas.height=82;const c=canvas.getContext('2d');c.imageSmoothingEnabled=false;c.fillStyle='#16212d';c.fillRect(0,0,96,82);c.fillStyle=CIVS[civId].color+'35';c.fillRect(4,4,88,74);draw(c,civId,unitId,46,79,112,'idle',0);}
+  function draw(c,civId,unitId,x,y,size=80,state='idle',frame=0,dir=1,alpha=1){c.save();c.globalAlpha=alpha;c.translate(Math.round(x),Math.round(y));c.scale(dir,1);const img=sprite(civId,unitId,state,frame),k=size/80;c.drawImage(img,-(img.anchorX??56)*k,-(img.anchorY??78.4)*k,img.width*k,img.height*k);c.restore();}
+  function portrait(canvas,civId,unitId){canvas.width=96;canvas.height=82;const c=canvas.getContext('2d');c.imageSmoothingEnabled=false;c.fillStyle='#16212d';c.fillRect(0,0,96,82);c.fillStyle=CIVS[civId].color+'35';c.fillRect(4,4,88,74);draw(c,civId,unitId,46,79,64,'idle',0);}
   return {sprite,draw,portrait,rect,line,poly,palette,cache};
 })();

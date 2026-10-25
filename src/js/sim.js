@@ -132,9 +132,8 @@ function teamHpSum(state, team) {
 // 需要略高于击杀等值伤害的收益（击杀公式里 hp 系数只有 0.08），
 // 但也不能让一次全推直接顶满 9999。3 倍是甜点。
 const BASE_HIT_ENERGY = 3;
-// 升本增加基地血量（累计）：TECH_A/B/C 建成时对应 baseHpMax 的比例。
-const TECH_BASE_HP_BONUS = { tech_a: 0.35, tech_b: 0.55, tech_c: 0.75 };
-function damageBase(state, base, amount, attackerTeam) {
+function damageBase(state, base, amount, attackerTeam, tier=4) {
+  amount*=[0,.18,.35,.85,1][tier]||1;
   if (!base || base.baseHp <= 0) return;
   const shielded = (base.baseShieldUntil || 0) > state.time;
   const reduction = shielded ? (base.baseShieldReduction || 0) : 0;
@@ -147,6 +146,29 @@ function damageBase(state, base, amount, attackerTeam) {
     const per = (dealt * BASE_HIT_ENERGY) / attackers.length;
     attackers.forEach(pp => { pp.energy = Math.min(9999, pp.energy + per); });
   }
+}
+
+// Every conversion path shares this age and machine immunity rule.
+function canConvert(u){return u.hp>0&&u.def.tier<=2&&!u.def.controlImmune&&!u.charmedBy;}
+function damageUnit(state,target,amount,attacker){
+  if(target.hp<=0)return;
+  const owner=state.players[target.seat],tr=CIVS[target.civId].traits;
+  if(attacker){
+    if(target.def.tier>=3&&attacker.def.tier<=2)amount*=.15;
+    if(attacker.def.vsMachine&&target.def.machine)amount*=attacker.def.vsMachine;
+    if(attacker.def.vsLarge&&(/giant|tank/.test(target.def.arch)||target.civId==='zom_asym'))amount*=attacker.def.vsLarge;
+    if(target.def.evasion&&(attacker.def.range||24)<60)amount*=target.def.evasion;
+    if(attacker.def.burn||attacker.def.bleed)target.poison={dmg:(attacker.def.burn||attacker.def.bleed),until:state.time+4};
+    if(attacker.def.slow){target.slowUntil=state.time+2;target.slowMul=attacker.def.slow;}
+    if(attacker.def.knockback)target.x=Math.max(60,Math.min(LANE_LEN-60,target.x+attacker.dir*attacker.def.knockback));
+  }
+  amount*=target.def.armor||1;
+  if(tr.armor&&(target.def.range||24)<70)amount*=tr.armor;
+  if((owner.wallUntil||0)>state.time&&(target.def.range||24)<70)amount*=.4;
+  if((owner.geneUntil||0)>state.time)amount*=.6;
+  if((owner.rebootUntil||0)>state.time&&target.def.machine)amount*=.75;
+  if((owner.overclockUntil||0)>state.time&&target.def.machine)amount*=1.25;
+  target.hp-=amount;target.lastDamagedAt=state.time;
 }
 
 // ===============================================================
@@ -194,6 +216,9 @@ function doSkill(state, p, civ, skillId) {
   if (!civ.skills.includes(skillId)) return { ok:false, err:"not owned" };
   const s = SKILLS[skillId];
   if (!s) return { ok:false, err:"no skill" };
+  if(p.age<(s.age||1))return {ok:false,err:'该技能需要时代 '+s.age};
+  const invalid=Factions.validate(state,p,s);if(invalid)return {ok:false,err:invalid};
+  if(s.kind==='hostile_takeover'&&!state.units.some(u=>u.team!==p.team&&canConvert(u)))return {ok:false,err:'没有可转化的低阶敌兵'};
   if (p.energy < s.cost) return { ok:false, err:"energy" };
   if (skillCdRemain(p, s, state.time) > 0) return { ok:false, err:"cd" };
 
@@ -212,6 +237,7 @@ function applySkill(state, p, s) {
   const spawnX = p.baseX + (isHK ? -SPAWN_BEHIND_BASE : SPAWN_BEHIND_BASE);
   const dir = isHK ? +1 : -1;
 
+  if(Factions.activate(state,p,s,spawnUnit))return;
   switch (s.kind) {
     case "summon": {
       const civ = CIVS[p.civId];
@@ -235,7 +261,7 @@ function applySkill(state, p, s) {
             x: spawnX + (dir * i * 10),
             y: p.row * 60,
             speedMul: s.speedMul || 1,
-            free: true,          // 不占人口
+            free: true,          // 免资源，仍占人口
           });
         }
       });
@@ -256,7 +282,7 @@ function applySkill(state, p, s) {
       // 直接对全部敌军 -HP，加视觉
       const enemyTeam = p.team === "hk" ? "zom" : "hk";
       state.units.forEach(u => {
-        if (u.team === enemyTeam) u.hp -= 9999;
+        if (u.team === enemyTeam) u.hp -= Math.min(1800,u.hpMax*.4);
       });
       state.effects.push({
         id: state.nextEffectId++,
@@ -328,7 +354,7 @@ function applySkill(state, p, s) {
     case "hostile_takeover": {
       const enemyTeam = p.team === "hk" ? "zom" : "hk";
       state.units
-        .filter(u => u.team === enemyTeam && u.hp > 0)
+        .filter(u => u.team === enemyTeam && canConvert(u))
         .sort((a, b) => b.def.cost - a.def.cost)
         .slice(0, s.count)
         .forEach(u => {
@@ -464,6 +490,7 @@ function applySkill(state, p, s) {
           u.hpMax = nextDef.hp;
           u.hp = Math.max(1, nextDef.hp * hpRatio);
           u.speed = nextDef.speed;
+          if(u.charmedBy&&nextDef.tier>=3){u.team=u.charmedBy.team;u.dir=u.team==='hk'?1:-1;u.charmedBy=null;}
         });
       break;
     }
@@ -483,6 +510,7 @@ function spawnUnit(state, p, unitId, opt) {
   const def = civ.units[unitId];
   if (!def) return null;
   opt = opt != null ? opt : {};
+  if(opt.free){if(p.pop+def.pop>p.popCap)return null;p.pop+=def.pop;}
   const isHK = p.team === "hk";
   // 出生位置抖动（确定性 RNG，联机同步安全）：避免所有兵在完全同一点叠罗汉
   const spawnRng = makeRng((state.nextUnitId | 0) * 2654435761 + p.seat * 977 + (state.seed | 0));
@@ -507,8 +535,8 @@ function spawnUnit(state, p, unitId, opt) {
     poison: null,      // { dmg, until }
     jumpUntil: 0,      // 跳跃锁定
     jumpFromX: 0, jumpToX: 0, jumpStart: 0, jumpDur: 0,
-    free: !!opt.free,  // 不占人口
-    popCost: opt.free ? 0 : def.pop,
+    free: !!opt.free,  // 技能免资源，仍按文明占人口
+    popCost: def.pop,
     born: state.time,
     lastAtkTarget: 0,
     atkFxTime: -999,      // 上次攻击时的 state.time（渲染层做挥砍/枪口闪光）
@@ -531,14 +559,14 @@ function tickSim(state, dt) {
 
   // ---- 每玩家：金钱增长 + 能量被动回复 ----
   state.players.forEach(p => {
-    if (p.baseHp <= 0) { p.pop = Math.max(0,p.pop-p.queue.reduce((n,q)=>n+CIVS[p.civId].units[q.unitId].pop,0)-p.workerQueue.length); p.queue=[];p.workerQueue=[];return; }
+    if (p.baseHp <= 0) { p.pop = Math.max(0,p.pop-p.queue.reduce((n,q)=>n+CIVS[p.civId].units[q.unitId].pop,0)-p.workerQueue.reduce((n,q)=>n+q.pop,0)); p.queue=[];p.workerQueue=[];return; }
     Econ.tick(state,p,dt);
-    // 被动能量回复：+12 / 秒（比按击杀更靠谱，保证一局至少能放 1-2 次大招）
-    p.energy = Math.min(9999, (p.energy || 0) + 12 * dt);
+    // Slow passive energy; powerful abilities also require their specified age.
+    p.energy = Math.min(9999, (p.energy || 0) + 6 * dt);
 
-    // 基地被动回血：脱战 5 秒 + baseRegen > 0 + 未爆 + 未满血
+    // Base regeneration resumes twelve seconds after taking damage.
     if (p.baseRegen > 0 && p.baseHp > 0 && p.baseHp < p.baseHpMax
-        && state.time - (p.lastHitTime || -999) > 5.0) {
+        && state.time - (p.lastHitTime ?? -999) > 12.0) {
       p.baseHp = Math.min(p.baseHpMax, p.baseHp + p.baseRegen * dt);
     }
 
@@ -569,10 +597,8 @@ function tickSim(state, dt) {
     if (!target) return;
     // 1v1：杂兵约 3~4 发；2v2/3v3 多线更乱，炮台提到 2 发清一个 T1 杂兵。
     const teamMode = state.mode !== "1v1";
-    const damage = teamMode
-      ? Math.min(32, Math.max(16, target.hpMax * 0.52))
-      : Math.min(24, Math.max(9, target.hpMax * 0.24));
-    target.hp -= damage;
+    const damage = 28+p.age*14;
+    damageUnit(state,target,damage,null);
     p.baseAttackCd = BASE_ATTACK_CD;
     state.projectiles.push({
       id: state.nextProjectileId++, kind: "base_bullet", team: p.team,
@@ -688,11 +714,11 @@ function tickSim(state, dt) {
         const enemy = pr.team === "hk" ? "zom" : "hk";
         for (const u of state.units) {
           if (u.team === enemy && Math.abs(u.x - pr.x_to) < 20) {
-            u.hp = 0;
+            damageUnit(state,u,400,null);
           }
         }
         const p = state.players[pr.seat];
-        if (p) spawnUnit(state, p, pr.unitId, { x: pr.x_to, y: pr.y_to });
+        if (p) spawnUnit(state, p, pr.unitId, { x: pr.x_to, y: pr.y_to,free:true });
         state.effects.push({
           id: state.nextEffectId++, kind: "fire_burst",
           x: pr.x_to, y: pr.y_to, r: 40, life: 0.5, initLife: 0.5,
@@ -702,7 +728,7 @@ function tickSim(state, dt) {
         const enemy = pr.team === "hk" ? "zom" : "hk";
         for (const u of state.units) {
           if (u.team === enemy && Math.abs(u.x - pr.x_to) < 24) {
-            u.hp -= pr.dmg;
+            const attacker=state.units.find(a=>a.id===pr.attackerId)||{def:CIVS[pr.attackerCiv]?.units[pr.attackerUnit]||{tier:4},dir:pr.team==='hk'?1:-1};damageUnit(state,u,pr.dmg,attacker);
           }
         }
         state.effects.push({
@@ -729,17 +755,14 @@ function tickSim(state, dt) {
   }
   state.projectiles = remainProj;
 
+  Factions.tick(state,dt);
   // ---- 每单位：AI（移动/攻击） ----
   for (const u of state.units) {
     if (u.hp <= 0) continue;
-    if (CIVS[u.civId].bonus === "regen") u.hp=Math.min(u.hpMax,u.hp+dt);
+
     // 中毒
     if (u.poison && u.poison.until > state.time) {
       u.hp -= u.poison.dmg * dt;
-    }
-    if ((u.stunnedUntil || 0) > state.time) {
-      if (u.cdAtk > 0) u.cdAtk -= dt;
-      continue;
     }
     // 转化解除
     if (u.charmedBy && u.charmedBy.until <= state.time) {
@@ -748,6 +771,10 @@ function tickSim(state, dt) {
       u.charmedBy = null;
     }
 
+    if ((u.stunnedUntil || 0) > state.time) {
+      if (u.cdAtk > 0) u.cdAtk -= dt;
+      continue;
+    }
     // 找目标（初版逻辑）：每帧全量选择最近的敌方单位；同时对比最近敌方基地。
     // 距离更近的一方胜出，不做粘性锁定。
     const enemyTeam = u.team === "hk" ? "zom" : "hk";
@@ -793,13 +820,14 @@ function tickSim(state, dt) {
       }
     }
     if (u.def.support === "convert") {
-      // 转化敌方一个单位为 dur 秒
-      if (target && !targetBase && u.cdAtk <= 0 && Math.abs(target.x - u.x) < u.def.range) {
+      const convertTarget=state.units.filter(t=>t.team!==u.team&&canConvert(t)&&Math.abs(t.x-u.x)<u.def.range).sort((a,b)=>Math.abs(a.x-u.x)-Math.abs(b.x-u.x)||a.id-b.id)[0]||null;
+      // Only low-age targets can be charmed, even behind an immune frontline.
+      if (convertTarget && u.cdAtk <= 0) {
         u.atkFxTime=state.time;
-        state.effects.push({id:state.nextEffectId++,kind:"convert",x:target.x,y:target.y,life:.6,initLife:.6});
-        target.charmedBy = { team: target.team, until: state.time + u.def.dur };
-        target.team = u.team;
-        target.dir = u.team === "hk" ? +1 : -1;
+        state.effects.push({id:state.nextEffectId++,kind:"convert",x:convertTarget.x,y:convertTarget.y,life:.6,initLife:.6});
+        convertTarget.charmedBy = { team: convertTarget.team, until: state.time + u.def.dur };
+        convertTarget.team = u.team;
+        convertTarget.dir = u.team === "hk" ? +1 : -1;
         u.cdAtk = u.def.atkCd;
       }
     }
@@ -857,7 +885,9 @@ function tickSim(state, dt) {
       if (u.cdAtk <= 0) {
         // 计算 buff
         const buffs = buffsForTeam[u.team];
-        let atkMul = 1;
+        let atkMul = u.damageMul||1;
+        const owner=state.players[u.seat];if((owner.geneUntil||0)>state.time)atkMul*=1.2;
+        const rally=state.units.filter(t=>t.team===u.team&&t.hp>0&&t.def.rally&&Math.abs(t.x-u.x)<180).reduce((n,t)=>Math.max(n,t.def.rally),1);atkMul*=rally;
         for (const b of buffs) atkMul *= b.atkMul;
 
         // 目标位置（用于视觉投射物）
@@ -871,8 +901,8 @@ function tickSim(state, dt) {
         const isRanged = (u.def.range || 24) > 40;
 
         if (targetBase) {
-          if(targetCastle) targetCastle.hp=Math.max(0,targetCastle.hp-u.def.dmg*atkMul);
-          else damageBase(state, nearBase, u.def.dmg * atkMul, u.team);
+          if(targetCastle) targetCastle.hp=Math.max(0,targetCastle.hp-u.def.dmg*atkMul*(u.def.siege||1)*[0,.18,.35,.85,1][u.def.tier]);
+          else damageBase(state, nearBase, u.def.dmg * atkMul*(u.def.siege||1), u.team,u.def.tier);
           // 基地也来个弹道视觉
           if (isLobber) {
             state.projectiles.push({
@@ -899,7 +929,7 @@ function tickSim(state, dt) {
             id: state.nextProjectileId++,
             kind: "lob", team: u.team,
             x_from: u.x, y_from: u.y - 20, x_to: atkTarget.x, y_to: atkTarget.y,
-            dmg: u.def.dmg * atkMul,
+            dmg: u.def.dmg * atkMul,attackerId:u.id,attackerCiv:u.civId,attackerUnit:u.unitId,
             t: 0, dur: 0.7, seat: u.seat, fromRow:u.row,toRow:targetBase?nearBase.row:atkTarget.row,
           });
         } else if (isAoe) {
@@ -907,7 +937,7 @@ function tickSim(state, dt) {
           const r = u.def.splash || 30;
           for (const t of state.units) {
             if (t.team !== u.team && Math.abs(t.x - atkTarget.x) < r) {
-              t.hp -= u.def.dmg * atkMul;
+              damageUnit(state,t,u.def.dmg*atkMul,u);
             }
           }
           state.projectiles.push({
@@ -916,7 +946,7 @@ function tickSim(state, dt) {
             splash: r, t: 0, dur: 0.5, seat: u.seat, fromRow:u.row,toRow:targetBase?nearBase.row:atkTarget.row,
           });
         } else if (isRanged) {
-          atkTarget.hp -= u.def.dmg * atkMul;
+          damageUnit(state,atkTarget,u.def.dmg*atkMul,u);
           state.projectiles.push({
             id: state.nextProjectileId++, kind: "bullet", team: u.team,
             x_from: u.x + u.dir * 10, y_from: u.y - 35,
@@ -925,16 +955,18 @@ function tickSim(state, dt) {
           });
         } else {
           // 纯近战
-          atkTarget.hp -= u.def.dmg * atkMul;
+          damageUnit(state,atkTarget,u.def.dmg*atkMul,u);
         }
-        u.cdAtk = u.def.atkCd;
+        if(u.def.suicide)u.hp=0;
+        u.cdAtk = u.def.atkCd*((state.players[u.seat].overclockUntil||0)>state.time&&u.def.machine?.55:1);
       } else {
         u.cdAtk -= dt;
       }
     } else {
       // 移动
       const buffs = buffsForTeam[u.team];
-      let moveMul = 1;
+      let moveMul = (u.slowUntil||0)>state.time?(u.slowMul||.5):1;
+      const owner=state.players[u.seat];if((owner.wallUntil||0)>state.time&&(u.def.range||24)<70)moveMul*=.75;if((owner.overclockUntil||0)>state.time&&u.def.machine)moveMul*=1.2;
       for (const b of buffs) moveMul *= b.moveMul;
       if (u.jumpUntil <= state.time) {
         // 单帧最多移动到攻击距离边缘，避免高速单位一步跨过近战目标。
@@ -959,9 +991,10 @@ function tickSim(state, dt) {
       const per = eng / enemies.length;
       enemies.forEach(pp => { pp.energy = Math.min(9999, pp.energy + per); pp.kills++; pp.killsGold += (u.def.cost * 0.1) | 0; });
     }
+    Factions.death(state,u);
     // 释放人口
     const owner = state.players[u.seat];
-    if (owner && !u.free) owner.pop = Math.max(0, owner.pop - (u.popCost ?? u.def.pop));
+    if (owner) owner.pop = Math.max(0, owner.pop - (u.popCost ?? u.def.pop));
 
     // 死亡触发：毒气池 / 爆炸
     if (u.def.onDeath === "poison_puddle") {
@@ -972,7 +1005,7 @@ function tickSim(state, dt) {
     } else if (u.def.onDeath === "explode") {
       for (const t of state.units) {
         if (t.team !== u.team && Math.abs(t.x - u.x) < u.def.explodeR) {
-          t.hp -= u.def.explodeDmg;
+          damageUnit(state,t,u.def.explodeDmg,u);
         }
       }
       state.effects.push({
@@ -1016,5 +1049,5 @@ function applySnapshot(target,snap) {
 window.Sim = {
   LANE_LEN, HQ_HK_X, HQ_ZOM_X, DT_MS, DT,
   makeRng, createInitialState, applyAction, tickSim, snapshot, applySnapshot,
-  skillCdRemain,
+  skillCdRemain,spawnUnit,canConvert,damageUnit,damageBase,
 };
