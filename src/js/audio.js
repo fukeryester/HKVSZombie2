@@ -104,10 +104,11 @@ window.Sound=(()=>{
     if(skills.size>100){skills.clear();for(const e of state._events||[])if(e.type==='skill')skills.add(e.time+'/'+e.data.seat+'/'+e.data.skill);}
     const ids=new Set(state.units.map(u=>u.id));for(const id of attacked.keys())if(!ids.has(id))attacked.delete(id);
   }
+  function seekTo(state){lastState=state;attacked.clear();skills.clear();hornIds.clear();if(hornVoice){hornVoice.stop();hornVoice.disconnect();hornVoice=null;}hornUntil=0;for(const u of state.units)attacked.set(u.id,u.atkFxTime);for(const e of state._events||[]){if(e.type==='war_summon')hornIds.add(e.data.unitId);if(e.type==='skill')skills.add(e.time+'/'+e.data.seat+'/'+e.data.skill);else skills.add(e.type+'/'+e.time+'/'+e.data.seat+'/'+(e.data.unitId??'')+'/'+(e.data.part??''));}}
   function setMuted(value){muted=!!value;unlock();if(master)master.gain.setTargetAtTime(muted?0:.64,ctx.currentTime,.03);try{localStorage.setItem('hkvsz2.muted',muted?'1':'0');}catch{}}
   function setMusic(value){musicOn=!!value;unlock();try{localStorage.setItem('hkvsz2.music',musicOn?'1':'0');}catch{}}
   function diagnostics(){let rms=0;if(analyser){const data=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(data);rms=Math.sqrt(data.reduce((n,x)=>n+x*x,0)/data.length);}return {...stats,context:ctx?.state||'locked',muted,musicOn,voices:voices+(hornVoice?1:0),hornDuration:hornBuffer?.duration||0,rms};}
   document.addEventListener('pointerdown',unlock,{passive:true});document.addEventListener('keydown',unlock,{passive:true});document.addEventListener('click',e=>{if(e.target.closest('button'))ui();});
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&musicBus)musicBus.gain.setTargetAtTime(0,ctx.currentTime,.03);});
-  return {unlock,ui,tick,profile,attack,beastAttack,skill,critical,setMuted,setMusic,diagnostics,get muted(){return muted;},get musicOn(){return musicOn;}};
+  return {unlock,ui,tick,profile,attack,beastAttack,skill,critical,seekTo,setMuted,setMusic,diagnostics,get muted(){return muted;},get musicOn(){return musicOn;}};
 })();
